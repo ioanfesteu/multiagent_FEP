@@ -23,8 +23,8 @@ INIT_ENERGY_MAX = 95.0     # Birth energy (max)
 
 # --- Social Dynamics & Trails ---
 SCENT_DECAY = 0.95         # How fast food scent disappears from environment (0-1)
-MEMORY_DECAY = 0.90        # How fast the agent forgets where it has been (0-1)
-FOOD_SIGNAL_DURATION = 15.0 # How many steps it emits scent after eating
+MEMORY_DECAY = 0.70        # How fast the agent forgets where it has been (0-1)
+FOOD_SIGNAL_DURATION = 25.0 # How many steps it emits scent after eating
 SOCIAL_WEIGHT = 3.0        # How strongly it is attracted to others' scent (vs exploration)
 
 # --- FEP Brain Parameters (Decision Making) ---
@@ -140,6 +140,9 @@ class AllostaticAgent(Agent):
         # A. Personal Memory - Update current position
         self.visits[pos] = self.visits.get(pos, 0.0) + 1.0
         
+        # Shared Memory - Mark global field (Stigmergy)
+        self.model.shared_memory[pos[0], pos[1]] += 1.0
+        
         # Decay all values
         for loc in self.visits:
             self.visits[loc] *= MEMORY_DECAY
@@ -187,8 +190,9 @@ class AllostaticAgent(Agent):
             G_pragmatic = - (WEIGHT_TEMP * err_T_pred + WEIGHT_ENERGY * err_E_pred)
             
             # --- B. Epistemic Value (AGENCY) ---
-            my_trace = self.visits.get((nx, ny), 0.0)
-            G_epistemic = 1.0 / (1.0 + EXPLORATION_FACTOR * my_trace)
+            # Switch to Shared Memory: Agents now avoid/seek where *anyone* has been
+            shared_trace = self.model.shared_memory[nx, ny]
+            G_epistemic = 1.0 / (1.0 + EXPLORATION_FACTOR * shared_trace)
             
             # --- C. Social Value ---
             G_social = 0.0

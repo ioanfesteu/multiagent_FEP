@@ -7,7 +7,7 @@ from agents import (
     AllostaticAgent, 
     GRID_WIDTH, GRID_HEIGHT, NUM_AGENTS, SEED,
     NUM_FOOD_PATCHES, FOOD_PATCH_AMOUNT_MIN, FOOD_PATCH_AMOUNT_MAX,
-    SCENT_DECAY
+    SCENT_DECAY, MEMORY_DECAY
 )
 
 # ==========================================
@@ -55,6 +55,9 @@ class DualDriveModel(Model):
         
         # Global Scent
         self.food_scent = np.zeros((width, height)) 
+        
+        # Global Navigation Memory (Shared Stigmergy)
+        self.shared_memory = np.zeros((width, height))
         
         # ********************************************
         # Internal params needed by agents
@@ -105,3 +108,7 @@ class DualDriveModel(Model):
         # ✅ FIX: Optimized to reduce NumPy temporaries on Windows
         np.multiply(self.food_scent, SCENT_DECAY, out=self.food_scent)
         np.putmask(self.food_scent, self.food_scent < 0.05, 0)
+        
+        # Decay Shared Memory
+        np.multiply(self.shared_memory, MEMORY_DECAY, out=self.shared_memory)
+        np.putmask(self.shared_memory, self.shared_memory < 0.05, 0)

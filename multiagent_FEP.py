@@ -198,6 +198,10 @@ def Page():
         async def loop():
             try:
                 while True:
+                    if len(model.agent_set) == 0:
+                        set_playing(False)
+                        break
+
                     model.step()
                     set_tick(increment_tick)  # ✅ FIX: Using function instead of lambda
                     await asyncio.sleep(0.1)
