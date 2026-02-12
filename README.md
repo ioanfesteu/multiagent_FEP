@@ -10,7 +10,7 @@ This repository contains the simulation kernel for **Experiment 02** from websit
 
 ### The Concept
 
-This is not a game. The agents in this simulation are **self-evidencing systems** resisting entropy. They do not follow arbitrary if/then rules; they are driven by a biological imperative to maintain homeostasis.
+This is not a game. The agents in this simulation are **self-evidencing systems** resisting entropy. They do not follow arbitrary if/then rules; they are driven by a **biological imperative to maintain homeostasis**.
 
 In this model, what we call "feelings" (hunger, cold, comfort, distress) are modeled as the subjective experience of the agent's internal state deviations. Consciousness, according to Solms, arises from the need to manage these affective states to prioritize attention.
 

@@ -31,6 +31,7 @@ SOCIAL_WEIGHT = 3.0        # How strongly it is attracted to others' scent (vs e
 WEIGHT_TEMP = 1.0          # Importance of thermal comfort
 WEIGHT_ENERGY = 4.0        # Importance of food (high priority)
 BETA_BASE = 6.0            # Base precision (determinism)
+WEIGHT_EPISTEMIC = 1.5     # Importance of curiosity (Agency/Exploration). Curiosity vs. Survival (G_pragmatic) vs. Socializing (G_social)
 EXPLORATION_FACTOR = 10.0  # Boredom resistance (high value = avoids repetition)
 
 # --- Environment Generation ---
@@ -171,7 +172,7 @@ class AllostaticAgent(Agent):
             if self.model.grid.out_of_bounds((nx, ny)):
                 continue
 
-            # --- A. Pragmatic Value ---
+            # --- A. Pragmatic Value (SURVIVAL) ---
             T_env_next = self.model.temperature[nx, ny]
             T_pred = self.T_int + self.model.eta * (T_env_next - self.T_int)
             err_T_pred = abs(T_pred - self.T_pref)
@@ -185,7 +186,7 @@ class AllostaticAgent(Agent):
             
             G_pragmatic = - (WEIGHT_TEMP * err_T_pred + WEIGHT_ENERGY * err_E_pred)
             
-            # --- B. Epistemic Value ---
+            # --- B. Epistemic Value (AGENCY) ---
             my_trace = self.visits.get((nx, ny), 0.0)
             G_epistemic = 1.0 / (1.0 + EXPLORATION_FACTOR * my_trace)
             
@@ -196,7 +197,7 @@ class AllostaticAgent(Agent):
                 G_social = SOCIAL_WEIGHT * scent_val 
 
             # Total G
-            G = G_pragmatic + (1.5 * G_epistemic) + G_social
+            G = G_pragmatic + (WEIGHT_EPISTEMIC * G_epistemic) + G_social
             
             moves.append((nx, ny))
             scores.append(G)
