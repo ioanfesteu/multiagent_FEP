@@ -337,5 +337,5 @@ if __name__ == "__main__":
     print("Run with: solara run multiagent_FEP.py")
 
     # uncomment the lines below to generate video frames (make sure to have enough disk space and time)
-    print("Generate video file comand: ffmpeg -framerate 10 -i frames/frame_%04d.png -c:v libx264 -pix_fmt yuv420p swarm_simulation.mp4")
-    generate_video_frames(steps=3000)
+    # print("Generate video file comand: ffmpeg -framerate 10 -i frames/frame_%04d.png -c:v libx264 -pix_fmt yuv420p swarm_simulation.mp4")
+    # generate_video_frames(steps=3000)
