@@ -19,10 +19,10 @@ def generate_temperature_field(width, height):
     for x in range(width):
         for y in range(height):
             # Warm zones (Global Plateau)
-            field[x, y] += 28 * np.exp(-((x-20)**2 + (y-20)**2) / 300)
+            field[x, y] += 28 * np.exp(-((x - width/2)**2 + (y - height/2)**2) / (width*7.5))
             # Local optima (Hot spots)
-            field[x, y] += 14 * np.exp(-((x-8)**2 + (y-32)**2) / 70)
-            field[x, y] += 12 * np.exp(-((x-30)**2 + (y-10)**2) / 60)
+            field[x, y] += 14 * np.exp(-((x - width*0.2)**2 + (y - height*0.8)**2) / 70)
+            field[x, y] += 12 * np.exp(-((x - width*0.75)**2 + (y - height*0.25)**2) / 60)
     return field
 
 def generate_food_field(width, height, n_patches):

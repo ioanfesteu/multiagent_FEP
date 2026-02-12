@@ -23,7 +23,7 @@ INIT_ENERGY_MAX = 95.0     # Birth energy (max)
 
 # --- Social Dynamics & Trails ---
 SCENT_DECAY = 0.95         # How fast food scent disappears from environment (0-1)
-MEMORY_DECAY = 0.70        # How fast the agent forgets where it has been (0-1)
+MEMORY_DECAY = 0.90        # How fast the agent forgets where it has been (0-1)
 FOOD_SIGNAL_DURATION = 25.0 # How many steps it emits scent after eating
 SOCIAL_WEIGHT = 3.0        # How strongly it is attracted to others' scent (vs exploration)
 
@@ -35,9 +35,9 @@ WEIGHT_EPISTEMIC = 1.5     # Importance of curiosity (Agency/Exploration). Curio
 EXPLORATION_FACTOR = 10.0  # Boredom resistance (high value = avoids repetition)
 
 # --- Environment Generation ---
-NUM_FOOD_PATCHES = 1
-FOOD_PATCH_AMOUNT_MIN = 40
-FOOD_PATCH_AMOUNT_MAX = 80
+NUM_FOOD_PATCHES = 2
+FOOD_PATCH_AMOUNT_MIN = 10
+FOOD_PATCH_AMOUNT_MAX = 30
 
 # --- Visualization Colors ---
 COLOR_OK = 'white'

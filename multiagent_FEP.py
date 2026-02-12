@@ -43,7 +43,10 @@ def get_plot_figure(model, step_number=0):
     """
     Version with Stats Overlay
     """
-    fig = plt.figure(figsize=(6,6))
+    # Adjust figure size based on grid aspect ratio to prevent squashing
+    aspect_ratio = model.grid.width / model.grid.height
+    fig_width = 6 * (aspect_ratio if aspect_ratio > 1 else 1)
+    fig = plt.figure(figsize=(fig_width, 6))
     ax = fig.add_subplot(111)
     
     # 1. Heatmap (Temperature)
@@ -138,6 +141,7 @@ def get_plot_figure(model, step_number=0):
     ax.set_xlim(-0.5, model.grid.width-0.5)
     ax.set_ylim(-0.5, model.grid.height-0.5)
     ax.axis('off')
+    ax.set_aspect('equal')  # Ensure square grid cells
     
     # Cleanup
     plt.close(fig)
