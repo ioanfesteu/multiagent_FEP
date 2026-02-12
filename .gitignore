@@ -1,0 +1,35 @@
+# --- Python Standard ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Medii Virtuale (Virtual Environments) ---
+venv/
+env/
+.env
+.venv/
+
+# --- IDE Settings (VS Code, PyCharm, etc) ---
+.idea/
+.vscode/
+*.swp
+
+# --- Fișiere generate ---
+# Folderul cu cadrele video (output_dir="frames")
+frames/
+
+# Fișiere video finale (generate de ffmpeg)
+*.mp4
+*.avi
+*.mov
+
+# Alte imagini generate temporar
+*.png
+*.jpg
+*.jpeg
+
+# --- Solara / Jupyter ---
+.ipynb_checkpoints/
+
+# --- Alte ---
+multiagent_food_trails.py

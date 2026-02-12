@@ -4,7 +4,7 @@
 
 ## // EXPERIMENT 02: THE ALLOSTATIC AGENTS
 
-This repository contains the simulation kernel for **Experiment 02**, an investigation into the emergence of primitive consciousness based on the theories of neuropsychologist **Mark Solms** (*The Hidden Spring*) and **Karl Friston's** *Free Energy Principle*.
+This repository contains the simulation kernel for **Experiment 02** from website https://mindworm.icu, an investigation into the emergence of primitive consciousness based on the theories of neuropsychologist **Mark Solms** (*The Hidden Spring*) and **Karl Friston's** *Free Energy Principle*.
 
 ---
 
@@ -20,7 +20,7 @@ In this model, what we call "feelings" (hunger, cold, comfort, distress) are mod
 
 The complexity of the swarm arises from simple, local interactions rather than global coordination.
 
-* **Myopic Sensing:** Agents exist in a "fog of war." They can only sense the 8 adjacent cells (Moore neighborhood). They have no global knowledge of the map or the location of food patches.
+* **Myopic Sensing:** Agents can only sense the 8 adjacent cells (Moore neighborhood). They have no global knowledge of the map or the location of food patches.
 * **Two-Channel Trace System:** To navigate this uncertainty, agents interact with two types of decaying markers:
     * **Navigation Trace:** Agents mark their path as they move. This acts as a "repellent" memory, discouraging backtracking and forcing the exploration of new territory.
     * **Food Pheromone:** Upon discovering energy, agents release a specific, high-valence scent. This volatile signal acts as a rudimentary form of stigmergic communication.
@@ -51,8 +51,12 @@ $$
 
 Affect (Mood) is the rate of change of the error. This integrated valence determines the agent's **Precision ($\beta$)**.
 
-* **Positive Affect:** Error is decreasing (High $\beta$, decisive).
-* **Negative Affect:** Error is increasing (Low $\beta$, volatile).
+$$\beta_t = -\frac{H_t - H_{t-1}}{\Delta t}$$
+
+* **Positive Affect:** Error is decreasing ($H_t < H_{t-1}$), leading to a **High $\beta$** (decisive behavior).
+* **Negative Affect:** Error is increasing ($H_t > H_{t-1}$), leading to a **Low $\beta$** (volatile or exploratory behavior).
+
+
 
 #### 4. Action Selection (Softmax)
 
@@ -80,3 +84,35 @@ $$
    ```bash
    git clone [https://github.com/ioanfesteu/multiagent_FEP.git](https://github.com/ioanfesteu/multiagent_FEP.git)
    cd multiagent_FEP
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   pip install mesa numpy matplotlib solara
+   ```
+
+3. **Run the interactive dashboard:**
+   ```bash
+   solara run multiagent_FEP.py
+   ```
+
+4. **Make a video of the whole simulation:**
+by uncommenting the last line of code. For every simulation step a snapshot will be saved on disk.
+After simulation is done make a video of the whole simulation with ffmpeg.
+   ```bash
+   python multiagent_FEP.py
+
+   ffmpeg -framerate 10 -i frames/frame_%04d.png -c:v libx264 -pix_fmt yuv420p swarm_simulation.mp4
+   ```
+
+### ⚙️ Tweaking the Simulation
+Tweaks can be made in *agents.py* and *model.py*.
+
+At the begining of *agents.py* you will find all the values you can play with and are pretty explanatory I hope. 
+
+Special atention should be payed for *eta*, *mu_affect* and *sigma* (lines 62, 63, 64) in *model.py*. You can find all the explanations in *HOWTO.md*.
+
+---
+
+### 📜 License
+CODE IS LAW. This project is open for research and educational purposes.
