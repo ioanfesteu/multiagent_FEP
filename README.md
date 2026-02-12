@@ -1,6 +1,6 @@
 # MINDWORM // Artificial Phenomenology
 
-> "The hard problem of consciousness is the problem of explaining how and why we have qualitative phenomenal experiences." — **David Chalmers**
+> "What I cannot create, I do not understand." — **Richard Feynman**
 
 ## // EXPERIMENT 02: THE ALLOSTATIC AGENTS
 
