@@ -7,7 +7,7 @@ from mesa import Agent
 # ==========================================
 
 # --- Simulation Dimensions ---
-GRID_WIDTH = 40
+GRID_WIDTH = 60
 GRID_HEIGHT = 40
 NUM_AGENTS = 10
 SEED = None # Set to an integer for reproducibility
@@ -35,7 +35,7 @@ WEIGHT_EPISTEMIC = 1.5     # Importance of curiosity (Agency/Exploration). Curio
 EXPLORATION_FACTOR = 10.0  # Boredom resistance (high value = avoids repetition)
 
 # --- Environment Generation ---
-NUM_FOOD_PATCHES = 2
+NUM_FOOD_PATCHES = 3
 FOOD_PATCH_AMOUNT_MIN = 10
 FOOD_PATCH_AMOUNT_MAX = 30
 
