@@ -36,13 +36,12 @@ from agents import (
 )
 
 # ==========================================
-# Visualization (OPTIMIZED)
+# Visualization (OPTIMIZED + OVERLAY)
 # ==========================================
 
-def get_plot_figure(model):
+def get_plot_figure(model, step_number=0):
     """
-    Version without cache for debugging
-    If this works, we will optimize later
+    Version with Stats Overlay
     """
     fig = plt.figure(figsize=(6,6))
     ax = fig.add_subplot(111)
@@ -75,7 +74,10 @@ def get_plot_figure(model):
         ax.scatter(sx, sy, c=COLOR_TRAIL, s=ss, alpha=0.8, marker='.', label='Food Trail')
 
     # 4. Agents
-    alive_count = len(model.agent_set)  # ✅ FIX: All in set are alive now
+    # Filter alive agents for accurate stats in overlay
+    alive_agents = [a for a in model.agent_set if a.is_alive]
+    n_alive = len(alive_agents)
+
     for agent in model.agent_set:
         
         # A. Visits (Black dots)
@@ -111,8 +113,28 @@ def get_plot_figure(model):
         
         ax.scatter(x, y, c=c, s=120, marker=marker, edgecolors='black', linewidth=1.5, zorder=z)
 
-    # ✅ FIX: Display dead count too
-    ax.set_title(f'Alive: {alive_count} / Dead: {model.dead_count}')
+    # 5. Stats Overlay (Integrated from overlay.py)
+    if n_alive > 0:
+        avg_E = sum(a.E_int for a in alive_agents) / n_alive
+        avg_T = sum(a.T_int for a in alive_agents) / n_alive
+        avg_Valence = sum(a.valence_integrated for a in alive_agents) / n_alive
+    else:
+        avg_E = 0; avg_T = 0; avg_Valence = 0
+
+    textstr = '\n'.join((
+        f'Step: {step_number}',
+        f'Alive: {n_alive} | Dead: {model.dead_count}',
+        f'Avg Energy: {avg_E:.1f}',
+        f'Avg Temp: {avg_T:.1f}',
+        f'Avg Mood: {avg_Valence:.2f}'
+    ))
+
+    # Place a text box in upper left in axes coords
+    props = dict(boxstyle='round', facecolor='white', alpha=0.8)
+    ax.text(0.02, 0.98, textstr, transform=ax.transAxes, fontsize=9,
+            verticalalignment='top', bbox=props)
+
+    # Map settings
     ax.set_xlim(-0.5, model.grid.width-0.5)
     ax.set_ylim(-0.5, model.grid.height-0.5)
     ax.axis('off')
@@ -280,8 +302,8 @@ def Page():
         $$ P(a) = \frac{e^{\beta \cdot G(a)}}{\sum e^{\beta \cdot G(a_i)}} $$
         """)
 
-    # Generate figure at each render
-    fig = get_plot_figure(model)
+    # Generate figure at each render with step number passed for overlay
+    fig = get_plot_figure(model, step_number=tick)
     solara.FigureMatplotlib(fig)
 
 
@@ -297,7 +319,8 @@ def generate_video_frames(steps=200, output_dir="frames"):
 
     for i in range(steps):
         model.step()
-        fig = get_plot_figure(model)
+        # Pass loop index 'i' as step_number for the overlay
+        fig = get_plot_figure(model, step_number=i)
         
         # Save frame
         fig.savefig(f"{output_dir}/frame_{i:04d}.png", dpi=120)
@@ -315,4 +338,4 @@ if __name__ == "__main__":
 
     # uncomment the lines below to generate video frames (make sure to have enough disk space and time)
     print("Generate video file comand: ffmpeg -framerate 10 -i frames/frame_%04d.png -c:v libx264 -pix_fmt yuv420p swarm_simulation.mp4")
-    generate_video_frames(steps=300)
+    generate_video_frames(steps=3000)

@@ -16,7 +16,17 @@ In this model, what we call "feelings" (hunger, cold, comfort, distress) are mod
 
 ---
 
-### The Dynamics
+### Demo
+
+Here is a visualization of the agents minimizing Free Energy in real-time. Notice how they form trails and change color based on their internal homeostatic error ($H$):
+
+![Swarm Simulation Demo](swarm_demo.gif)
+
+*(White = Optimal, Blue = Cold, Red = Hot, Brown = Hungry)*
+
+---
+
+### Dynamics
 
 The complexity of the swarm arises from simple, local interactions rather than global coordination.
 
