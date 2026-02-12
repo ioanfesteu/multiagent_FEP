@@ -105,6 +105,8 @@ After simulation is done make a video of the whole simulation with ffmpeg.
    ffmpeg -framerate 10 -i frames/frame_%04d.png -c:v libx264 -pix_fmt yuv420p swarm_simulation.mp4
    ```
 
+---
+
 ### ⚙️ Tweaking the Simulation
 Tweaks can be made in *agents.py* and *model.py*.
 
