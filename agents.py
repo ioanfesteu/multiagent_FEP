@@ -31,6 +31,7 @@ SOCIAL_WEIGHT = 3.0        # How strongly it is attracted to others' scent (vs e
 WEIGHT_TEMP = 1.0          # Importance of thermal comfort
 WEIGHT_ENERGY = 4.0        # Importance of food (high priority)
 BETA_BASE = 6.0            # Base precision (determinism)
+BETA_MAX = 30.0            # Maximum precision (clipping)
 WEIGHT_EPISTEMIC = 1.5     # Importance of curiosity (Agency/Exploration). Curiosity vs. Survival (G_pragmatic) vs. Socializing (G_social)
 EXPLORATION_FACTOR = 10.0  # Boredom resistance (high value = avoids repetition)
 
@@ -69,6 +70,7 @@ class AllostaticAgent(Agent):
         # FEP Internals
         self.prev_total_error = None
         self.valence_integrated = 0.0
+        self.valence_bound = 2.0  # For dynamic progress bar scaling
         self.current_beta = BETA_BASE
         
         # Memory - OPTIMIZED: with batch cleanup
@@ -130,7 +132,12 @@ class AllostaticAgent(Agent):
         
         # Modulate Precision
         factor = np.exp(self.model.sigma * self.valence_integrated)
-        self.current_beta = np.clip(BETA_BASE * factor, 0.5, 30.0)
+        self.current_beta = np.clip(BETA_BASE * factor, 0.5, BETA_MAX)
+
+        # Update valence bound for visualization
+        current_abs_valence = abs(self.valence_integrated)
+        if current_abs_valence > self.valence_bound:
+            self.valence_bound = current_abs_valence
 
     def manage_memory_and_scent(self):
         """✅ FIX: Optimized to reduce memory fragmentation on Windows"""
