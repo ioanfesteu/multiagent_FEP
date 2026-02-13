@@ -1,6 +1,8 @@
 # MINDWORM // Artificial Phenomenology
 
-> "The hard problem of consciousness is the problem of explaining how and why we have qualitative phenomenal experiences." — **David Chalmers**
+> "What I cannot create, I do not understand." — **Richard Feynman**
+
+<br/>
 
 ## // EXPERIMENT 02: THE ALLOSTATIC AGENTS
 
@@ -123,6 +125,14 @@ Tweaks can be made in *agents.py* and *model.py*.
 At the begining of *agents.py* you will find all the values you can play with and are pretty explanatory I hope. 
 
 Special atention should be payed for *eta*, *mu_affect* and *sigma* (lines 62, 63, 64) in *model.py*. You can find all the explanations in *HOWTO.md*.
+
+---
+
+### 📖 Want to learn more?
+
+The main reason I started this project is because I wanted to learn about FEP and active inference. At first it seemed very intimidating to me especially when I was presented with the mathematical framework used by Friston. Then I said that there must be easier ways to understand this paradigm. Reading Mark Solms' book, "The Hidden Spring", helped me enormously to understand concepts that were unfamiliar to me. Therefore, I created some documents to help the curious reader better understand the philosophical and technical foundations of this project. 
+
+Start with INSIGHTS.md in /docs folder. Good luck!
 
 ---
 

@@ -34,3 +34,6 @@ frames/
 # --- Alte ---
 multiagent_food_trails.py
 overlay.py
+docs/analiza_multiagent_FEP.md
+docs/supliment_insights_teoretice.md
+multiagent_test.py

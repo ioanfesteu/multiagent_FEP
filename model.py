@@ -62,7 +62,7 @@ class DualDriveModel(Model):
         # ********************************************
         # Internal params needed by agents
         # Explained in detail in HOWTO.md
-        self.eta = 0.15        
+        self.eta = 0.05        
         self.mu_affect = 0.1
         self.sigma = 1.0
         # ********************************************

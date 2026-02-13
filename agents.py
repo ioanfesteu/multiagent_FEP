@@ -23,7 +23,7 @@ INIT_ENERGY_MAX = 95.0     # Birth energy (max)
 
 # --- Social Dynamics & Trails ---
 SCENT_DECAY = 0.95         # How fast food scent disappears from environment (0-1)
-MEMORY_DECAY = 0.90        # How fast the agent forgets where it has been (0-1)
+MEMORY_DECAY = 0.75        # How fast the agent forgets where it has been (0-1)
 FOOD_SIGNAL_DURATION = 25.0 # How many steps it emits scent after eating
 SOCIAL_WEIGHT = 3.0        # How strongly it is attracted to others' scent (vs exploration)
 
