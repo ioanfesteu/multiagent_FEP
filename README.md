@@ -1,10 +1,6 @@
 # MINDWORM // Artificial Phenomenology
 
 > "What I cannot create, I do not understand." — **Richard Feynman**
-<<<<<<< HEAD
-=======
-
->>>>>>> 2984937e86c06da619c70a44dc2bb56974b06459
 <br/>
 
 ## // EXPERIMENT 02: THE ALLOSTATIC AGENTS
