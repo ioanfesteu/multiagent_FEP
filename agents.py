@@ -7,7 +7,7 @@ from mesa import Agent
 # ==========================================
 
 # --- Simulation Dimensions ---
-GRID_WIDTH = 60
+GRID_WIDTH = 80
 GRID_HEIGHT = 40
 NUM_AGENTS = 10
 SEED = None # Set to an integer for reproducibility
@@ -22,8 +22,8 @@ INIT_ENERGY_MIN = 40.0     # Birth energy (min)
 INIT_ENERGY_MAX = 95.0     # Birth energy (max)
 
 # --- Social Dynamics & Trails ---
-SCENT_DECAY = 0.95         # How fast food scent disappears from environment (0-1)
-MEMORY_DECAY = 0.75        # How fast the agent forgets where it has been (0-1)
+SCENT_DECAY = 0.98         # How fast food scent disappears from environment (0-1)
+MEMORY_DECAY = 0.80        # How fast the agent forgets where it has been (0-1)
 FOOD_SIGNAL_DURATION = 25.0 # How many steps it emits scent after eating
 SOCIAL_WEIGHT = 3.0        # How strongly it is attracted to others' scent (vs exploration)
 

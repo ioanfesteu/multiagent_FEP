@@ -99,16 +99,22 @@ $$
 
 2. **Install dependencies:**
    ```bash
-   pip install mesa numpy matplotlib solara
+   pip install mesa numpy matplotlib plotly solara
    ```
 
-3. **Run the interactive dashboard:**
+3. **Run the basic dashboard.** Uses the matplotib library, good for starting out.
    ```bash
    solara run multiagent_FEP.py
    ```
 
-4. **Make a video of the whole simulation:**
-by uncommenting the last line of code. For every simulation step a snapshot will be saved on disk.
+4. **Run the interactive dashboard.** Uses Plotly library. You can select individual agents and watch
+their parameters change. Select individual agents from dropdown menu or by pausing simulation, selecting agent by clicking on, and then play button.
+   ```bash
+   solara run multiagent_FEP_i.py
+   ```
+
+5. **Make a video of the whole simulation:**
+by uncommenting the last line of code in *multiagent_FEP.py*. For every simulation step a snapshot will be saved on disk.
 After simulation is done make a video of the whole simulation with ffmpeg.
    ```bash
    python multiagent_FEP.py
