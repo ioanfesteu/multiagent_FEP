@@ -2,7 +2,7 @@
 import numpy as np
 from mesa import Model
 from mesa.space import MultiGrid
-from mesa.agent import AgentSet
+from mesa.datacollection import DataCollector
 from agents import (
     AllostaticAgent, 
     GRID_WIDTH, GRID_HEIGHT, NUM_AGENTS, SEED,
@@ -47,7 +47,6 @@ class DualDriveModel(Model):
     def __init__(self, width=GRID_WIDTH, height=GRID_HEIGHT, num_agents=NUM_AGENTS, seed=SEED):
         super().__init__(seed=seed)
         self.grid = MultiGrid(width, height, torus=False)
-        self.agent_set = AgentSet([], self)
         
         # Fields
         self.temperature = generate_temperature_field(width, height)
@@ -58,14 +57,6 @@ class DualDriveModel(Model):
         
         # Global Navigation Memory (Shared Stigmergy)
         self.shared_memory = np.zeros((width, height))
-        
-        # ********************************************
-        # Internal params needed by agents
-        # Explained in detail in HOWTO.md
-        self.eta = 0.05        
-        self.mu_affect = 0.1
-        self.sigma = 1.0
-        # ********************************************
         
         self.directions = [(-1,0),(1,0),(0,-1),(0,1),(1,1),(-1,1),(1,-1),(-1,-1)]
 
@@ -78,12 +69,26 @@ class DualDriveModel(Model):
             rx = self.random.randint(0, width-1)
             ry = self.random.randint(0, height-1)
             self.grid.place_agent(agent, (rx, ry))
-            self.agent_set.add(agent)
+            
+        # ==========================================
+        # DATA COLLECTOR (Scientific Evaluation)
+        # ==========================================
+        self.datacollector = DataCollector(
+            agent_reporters={
+                "Energy": "E_int",
+                "Temp": "T_int",
+                "Valence": "valence_integrated",
+                "Beta": "current_beta",
+                "Alive": "is_alive",
+                "X": lambda a: a.pos[0],
+                "Y": lambda a: a.pos[1]
+            }
+        )
 
     def step(self):
         """✅ FIX: Optimized for dead agent cleanup and NumPy operations"""
         # 1. Agents step
-        agents = list(self.agent_set)
+        agents = list(self.agents)
         self.random.shuffle(agents)  # ✅ FIX: Using self.random (no longer need random_gen)
         
         dead_agents = []
@@ -101,7 +106,7 @@ class DualDriveModel(Model):
         # ✅ FIX: Cleanup dead agents from grid and agent_set
         for agent in dead_agents:
             self.grid.remove_agent(agent)
-            self.agent_set.remove(agent)
+            self.agents.remove(agent)
             self.dead_count += 1
             
         # 2. Global Environment Decay
@@ -112,3 +117,6 @@ class DualDriveModel(Model):
         # Decay Shared Memory
         np.multiply(self.shared_memory, MEMORY_DECAY, out=self.shared_memory)
         np.putmask(self.shared_memory, self.shared_memory < 0.05, 0)
+        
+        # Collect Data
+        self.datacollector.collect(self)

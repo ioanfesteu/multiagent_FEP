@@ -108,7 +108,7 @@ $$
    ```
 
 4. **Run the interactive dashboard.** Uses Plotly library. You can select individual agents and watch
-their parameters change. Select individual agents from dropdown menu or by pausing simulation, selecting agent by clicking on, and then play button.
+their parameters change. Select individual agents from dropdown menu or by pausing simulation, selecting agent by clicking on, and then again clicking on the play button.
    ```bash
    solara run multiagent_FEP_i.py
    ```
@@ -125,11 +125,11 @@ After simulation is done make a video of the whole simulation with ffmpeg.
 ---
 
 ### ⚙️ Tweaking the Simulation
-Tweaks can be made in *agents.py* and *model.py*.
+Tweaks can be made in *agents.py*.
 
 At the begining of *agents.py* you will find all the values you can play with and are pretty explanatory I hope. 
 
-Special atention should be payed for *eta*, *mu_affect* and *sigma* (lines 62, 63, 64) in *model.py*. You can find all the explanations in *HOWTO.md*.
+Special atention should be payed for *eta*, *mu_affect* and *sigma*. You can find all the explanations in *HOWTO.md*.
 
 ---
 

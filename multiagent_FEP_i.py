@@ -4,6 +4,7 @@
 import solara
 import plotly.graph_objects as go
 import numpy as np
+import pandas as pd
 import asyncio
 
 # Importam modelul si constantele existente
@@ -32,7 +33,8 @@ def get_plot_figure(model, selected_agent_id=None):
         colorscale='RdBu', reversescale=True, zmin=0, zmax=40,
         showscale=False,
         hoverinfo='skip', 
-        opacity=1
+        opacity=1,
+        uid="heatmap"
     ))
 
     # 2. Food patches
@@ -48,7 +50,7 @@ def get_plot_figure(model, selected_agent_id=None):
     fig.add_trace(go.Scatter(
         x=fx, y=fy, mode='markers',
         marker=dict(color=COLOR_FOOD, size=fs, line=dict(color='green', width=1), opacity=1),
-        name='Food', hoverinfo='skip'
+        name='Food', hoverinfo='skip', uid="food"
     ))
 
     # 3. Social Scent Trails
@@ -63,28 +65,15 @@ def get_plot_figure(model, selected_agent_id=None):
     
     fig.add_trace(go.Scatter(
         x=sx, y=sy, mode='markers',
-        marker=dict(color=COLOR_TRAIL, size=ss, opacity=1),
-        name='Trail', hoverinfo='skip'
-    ))
-
-    # 3.5 Visits (Traces - Re-added)
-    vx, vy = [], []
-    for agent in model.agent_set:
-        for (pos_x, pos_y), val in agent.visits.items():
-            if val > 0.1:
-                vx.append(pos_x)
-                vy.append(pos_y)
-    
-    fig.add_trace(go.Scatter(
-        x=vx, y=vy, mode='markers',
-        marker=dict(color='black', size=3, opacity=0.1),
-        name='Visits', hoverinfo='skip'
+        marker=dict(color=COLOR_TRAIL, size=ss, opacity=0.4),
+        name='Trail', hoverinfo='skip', uid="trail"
     ))
 
     # 4. Agents
     ax, ay, ac, asize, aedge, awidth, aids, atext = [], [], [], [], [], [], [], []
     
-    for agent in model.agent_set:
+    for agent in model.agents:
+        if agent.pos is None: continue # Safety check for dead agents
         x, y = agent.pos
         
         # --- Logic for Red/Blue/Brown (Copiat din agents.py) ---
@@ -127,8 +116,14 @@ def get_plot_figure(model, selected_agent_id=None):
         customdata=aids, # AICI stocam ID-ul pentru click event
         hovertext=atext,
         hoverinfo='text',
-        name='Agents'
+        name='Agents',
+        uid="agents"
     ))
+
+    # Calculam dimensiunile figurii pentru a mentine aspect ratio corect
+    # Inaltimea fixa de 600px, latimea se adapteaza
+    plot_height = 600
+    plot_width = int(plot_height * (model.grid.width / model.grid.height))
 
     # Layout settings
     fig.update_layout(
@@ -142,7 +137,7 @@ def get_plot_figure(model, selected_agent_id=None):
         hoverdistance=50, # Mareste raza de detectie a click-ului (snap)
         uirevision='constant', # Pastreaza starea de zoom/pan
         transition={'duration': 0}, # Dezactiveaza animatiile pentru raspuns rapid
-        width=600, height=600
+        width=plot_width, height=plot_height
     )
     
     return fig
@@ -203,7 +198,7 @@ def Page():
         
         async def loop():
             while True:
-                if len(model.agent_set) == 0:
+                if len(model.agents) == 0:
                     set_playing(False)
                     break
                 model.step()
@@ -230,6 +225,13 @@ def Page():
     def on_play():
         set_playing(not is_playing)
 
+    def on_export():
+        """Exporta datele colectate in CSV"""
+        agent_df = model.datacollector.get_agent_vars_dataframe()
+        
+        agent_df.to_csv("fep_swarm_agent_data.csv")
+        print("✅ Data exported to 'fep_swarm_agent_data.csv'")
+
     # Handler pentru click pe grafic
     def on_plot_click(data):
         # data contine informatii despre punctul click-uit
@@ -251,17 +253,19 @@ def Page():
             if isinstance(indexes, list) and len(indexes) > 0:
                 idx = indexes[0]
                 # Reconstruim lista agentilor pentru a gasi ID-ul dupa index
-                # Ordinea de iterare in model.agent_set este aceeasi ca la generarea graficului
-                agents_list = list(model.agent_set)
+                # Ordinea de iterare in model.agents este aceeasi ca la generarea graficului
+                # Filtram agentii fara pozitie pentru a pastra sincronizarea cu graficul
+                agents_list = [a for a in model.agents if a.pos is not None]
                 if 0 <= idx < len(agents_list):
                     agent_id = agents_list[idx].unique_id
         
         if agent_id is not None:
             # print(f"DEBUG: Selecting Agent ID: {agent_id}")
             set_selected_agent_id(agent_id)
+            
 
     # --- Stats Calculation ---
-    agents = list(model.agent_set)
+    agents = list(model.agents)
     alive_agents = [a for a in agents if a.is_alive]
     n_alive = len(alive_agents)
     
@@ -281,20 +285,22 @@ def Page():
             solara.Button("Step", on_click=on_step, color="warning")
             solara.Button("Play/Pause", on_click=on_play, color="success" if is_playing else "primary")
             solara.Button("Reset", on_click=on_reset, color="error")
+            solara.Button("Export CSV", on_click=on_export, color="primary", outlined=True)
+            
             
         solara.Markdown("---")
         
         # Dropdown sincronizat cu selectia de pe grafic
-        agent_ids = sorted([a.unique_id for a in model.agent_set])
+        agent_ids = sorted([a.unique_id for a in model.agents])
         solara.Select(
-            label="Select Agent (or click graph)", 
+            label="Select Agent (or click graph when paused)", 
             values=[None] + agent_ids, 
             value=selected_agent_id, 
             on_value=set_selected_agent_id
         )
         
         if selected_agent_id is not None:
-            agent = next((a for a in model.agent_set if a.unique_id == selected_agent_id), None)
+            agent = next((a for a in model.agents if a.unique_id == selected_agent_id), None)
             
             if agent and agent.is_alive:
                 solara.Markdown(f"### Agent {agent.unique_id} Details")
@@ -323,7 +329,7 @@ def Page():
             elif agent and not agent.is_alive:
                 solara.Error(f"Agent {selected_agent_id} is DEAD 💀")
             else:
-                solara.Warning("Agent not found (Reset?)")
+                solara.Warning("Agent dead. RIP.")
 
         # Global Stats
         solara.Markdown("---")
@@ -384,9 +390,7 @@ def Page():
         Softmax probability modulated by Precision ($\beta$):
         $$ P(a) = \frac{e^{\beta \cdot G(a)}}{\sum e^{\beta \cdot G(a_i)}} $$
         """)
-
+    
     # Main Area
     fig = get_plot_figure(model, selected_agent_id)
-    
-    # Folosim FigurePlotly si atasam handler-ul on_click
     solara.FigurePlotly(fig, on_click=on_plot_click)

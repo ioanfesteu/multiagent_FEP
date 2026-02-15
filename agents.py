@@ -10,7 +10,7 @@ from mesa import Agent
 GRID_WIDTH = 80
 GRID_HEIGHT = 40
 NUM_AGENTS = 10
-SEED = None # Set to an integer for reproducibility
+SEED = 3 # Set to an integer for reproducibility
 
 # --- Agent Physiology (Life & Death) ---
 METABOLISM = 0.15          # Energy consumed per step
@@ -23,7 +23,7 @@ INIT_ENERGY_MAX = 95.0     # Birth energy (max)
 
 # --- Social Dynamics & Trails ---
 SCENT_DECAY = 0.98         # How fast food scent disappears from environment (0-1)
-MEMORY_DECAY = 0.80        # How fast the agent forgets where it has been (0-1)
+MEMORY_DECAY = 0.90        # How fast the agent forgets where it has been (0-1)
 FOOD_SIGNAL_DURATION = 25.0 # How many steps it emits scent after eating
 SOCIAL_WEIGHT = 3.0        # How strongly it is attracted to others' scent (vs exploration)
 
@@ -35,10 +35,15 @@ BETA_MAX = 30.0            # Maximum precision (clipping)
 WEIGHT_EPISTEMIC = 1.5     # Importance of curiosity (Agency/Exploration). Curiosity vs. Survival (G_pragmatic) vs. Socializing (G_social)
 EXPLORATION_FACTOR = 10.0  # Boredom resistance (high value = avoids repetition)
 
+# --- Psycho-behavioral Parameters ---
+ETA = 0.1                  # Thermal conductivity / Physical inertia
+MU_AFFECT = 0.4            # Affect integration rate / Emotional stability
+SIGMA = 0.8                # Precision sensitivity to affect / Psychosomatic coupling
+
 # --- Environment Generation ---
 NUM_FOOD_PATCHES = 3
-FOOD_PATCH_AMOUNT_MIN = 10
-FOOD_PATCH_AMOUNT_MAX = 30
+FOOD_PATCH_AMOUNT_MIN = 30
+FOOD_PATCH_AMOUNT_MAX = 80
 
 # --- Visualization Colors ---
 COLOR_OK = 'white'
@@ -87,7 +92,7 @@ class AllostaticAgent(Agent):
         
         # 1. Thermal Regulation (Physics)
         T_env = self.model.temperature[x, y]
-        self.T_int += self.model.eta * (T_env - self.T_int)
+        self.T_int += ETA * (T_env - self.T_int)
         
         # 2. Metabolism
         self.E_int -= METABOLISM
@@ -128,10 +133,10 @@ class AllostaticAgent(Agent):
         self.prev_total_error = total_error
         
         # Integrate Mood
-        self.valence_integrated += self.model.mu_affect * (inst_valence - self.valence_integrated)
+        self.valence_integrated += MU_AFFECT * (inst_valence - self.valence_integrated)
         
         # Modulate Precision
-        factor = np.exp(self.model.sigma * self.valence_integrated)
+        factor = np.exp(SIGMA * self.valence_integrated)
         self.current_beta = np.clip(BETA_BASE * factor, 0.5, BETA_MAX)
 
         # Update valence bound for visualization
@@ -184,7 +189,7 @@ class AllostaticAgent(Agent):
 
             # --- A. Pragmatic Value (SURVIVAL) ---
             T_env_next = self.model.temperature[nx, ny]
-            T_pred = self.T_int + self.model.eta * (T_env_next - self.T_int)
+            T_pred = self.T_int + ETA * (T_env_next - self.T_int)
             err_T_pred = abs(T_pred - self.T_pref)
             
             food_there = self.model.food[nx, ny]
@@ -206,6 +211,14 @@ class AllostaticAgent(Agent):
             if is_hungry:
                 scent_val = self.model.food_scent[nx, ny]
                 G_social = SOCIAL_WEIGHT * scent_val 
+            # if is_hungry:
+            #     scent_val = self.model.food_scent[nx, ny]
+            #     # ✅ FIX: Ignoram mirosul de pe pozitia curenta daca nu mai e mancare
+            #     # Altfel agentul ramane blocat in propriul miros dupa ce mananca
+            #     if dx == 0 and dy == 0 and food_there < 0.1:
+            #         G_social = 0.0
+            #     else:
+            #         G_social = SOCIAL_WEIGHT * scent_val 
 
             # Total G
             G = G_pragmatic + (WEIGHT_EPISTEMIC * G_epistemic) + G_social
