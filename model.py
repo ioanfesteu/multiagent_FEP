@@ -7,7 +7,8 @@ from agents import (
     AllostaticAgent, 
     GRID_WIDTH, GRID_HEIGHT, NUM_AGENTS, SEED,
     NUM_FOOD_PATCHES, FOOD_PATCH_AMOUNT_MIN, FOOD_PATCH_AMOUNT_MAX,
-    SCENT_DECAY, MEMORY_DECAY
+    SCENT_DECAY, MEMORY_DECAY,
+    TEMP_BASE_MAX, TEMP_SPOT_1, TEMP_SPOT_2
 )
 
 # ==========================================
@@ -16,13 +17,14 @@ from agents import (
 
 def generate_temperature_field(width, height):
     field = np.zeros((width, height))
+    
     for x in range(width):
         for y in range(height):
             # Warm zones (Global Plateau)
-            field[x, y] += 28 * np.exp(-((x - width/2)**2 + (y - height/2)**2) / (width*7.5))
+            field[x, y] += TEMP_BASE_MAX * np.exp(-((x - width/2)**2 + (y - height/2)**2) / (width*7.5))
             # Local optima (Hot spots)
-            field[x, y] += 14 * np.exp(-((x - width*0.2)**2 + (y - height*0.8)**2) / 70)
-            field[x, y] += 12 * np.exp(-((x - width*0.75)**2 + (y - height*0.25)**2) / 60)
+            field[x, y] += TEMP_SPOT_1 * np.exp(-((x - width*0.2)**2 + (y - height*0.8)**2) / 70)
+            field[x, y] += TEMP_SPOT_2 * np.exp(-((x - width*0.75)**2 + (y - height*0.25)**2) / 60)
     return field
 
 def generate_food_field(width, height, n_patches):

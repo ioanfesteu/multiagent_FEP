@@ -44,6 +44,9 @@ SIGMA = 0.8                # Precision sensitivity to affect / Psychosomatic cou
 NUM_FOOD_PATCHES = 3
 FOOD_PATCH_AMOUNT_MIN = 30
 FOOD_PATCH_AMOUNT_MAX = 80
+TEMP_BASE_MAX = 28.0       # Temperatura maxima a zonei centrale
+TEMP_SPOT_1 = 14.0         # Temperatura sursei locale 1
+TEMP_SPOT_2 = 12.0         # Temperatura sursei locale 2
 
 # --- Visualization Colors ---
 COLOR_OK = 'white'
