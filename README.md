@@ -32,9 +32,10 @@ Here is a visualization of the agents minimizing Free Energy in real-time. Notic
 The complexity of the swarm arises from simple, local interactions rather than global coordination.
 
 * **Myopic Sensing:** Agents can only sense the 8 adjacent cells (Moore neighborhood). They have no global knowledge of the map or the location of food patches.
-* **Two-Channel Trace System:** To navigate this uncertainty, agents interact with two types of decaying markers:
+* **Three-Channel Trace System:** To navigate this uncertainty, agents interact with three types of decaying markers:
     * **Navigation Trace:** Agents mark their path as they move. This acts as a "repellent" memory, discouraging backtracking and forcing the exploration of new territory.
     * **Food Pheromone:** Upon discovering energy, agents release a specific, high-valence scent. This volatile signal acts as a rudimentary form of stigmergic communication.
+    * **Associative Thermal Memory:** Agents remember their internal temperature context when they find food. This creates a "thermal attraction field" that guides them back to favorable environments. A rudimentary form of memory in the sense of "it used to be nice here and maybe it will find food here again".
 
 ---
 
@@ -55,10 +56,17 @@ $$
 Before moving, an agent simulates all possible adjacent steps and calculates the Expected Free Energy ($G$):
 
 $$
-G(action) = \underbrace{G_{pragmatic}}_{\text{Survival}} + \underbrace{G_{epistemic}}_{\text{Curiosity}} + \underbrace{G_{social}}_{\text{Swarm}}
+G(a) = \underbrace{G_{pragmatic}}_{\text{Survival}} + \underbrace{G_{epistemic}}_{\text{Curiosity}} + \underbrace{G_{social}}_{\text{Swarm}} + \underbrace{G_{memory}}_{\text{Experience}}
 $$
 
-#### 3. Affect & Precision ($\beta$)
+#### 3. Associative Thermal Memory ($G_{memory}$)
+
+The agent builds a non-parametric map of its homeostatic successes. A Sum-KDE (Kernel Density Estimation) is used to favor frequent feeding contexts:
+
+$$ V_{hat}(T) = \sum_{k} r_k \cdot e^{-\frac{(T - T_k)^2}{2\sigma^2}} $$
+$$ G_{memory}(a) = -\alpha \cdot V_{hat}(T_{pred}^{(a)}) $$
+
+#### 4. Affect & Precision ($\beta$)
 
 Affect (Mood) is the rate of change of the error. This integrated valence determines the agent's **Precision ($\beta$)**.
 

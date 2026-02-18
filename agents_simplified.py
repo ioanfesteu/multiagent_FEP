@@ -32,7 +32,7 @@ WEIGHT_TEMP = 1.0          # Importance of thermal comfort
 WEIGHT_ENERGY = 4.0        # Importance of food (high priority)
 BETA_BASE = 6.0            # Base precision (determinism)
 BETA_MAX = 30.0            # Maximum precision (clipping)
-WEIGHT_EPISTEMIC = 1.5     # Importance of curiosity (Agency/Exploration). Curiosity vs. Survival (G_pragmatic) vs. Socializing (G_social)
+WEIGHT_EPISTEMIC = 1.5     # Importance of curiosity (Agency/Exploration)
 EXPLORATION_FACTOR = 10.0  # Boredom resistance (high value = avoids repetition)
 
 # --- Psycho-behavioral Parameters ---
@@ -53,17 +53,16 @@ SIGMA = 0.8                # Precision sensitivity to affect / Psychosomatic cou
 # V_hat(T)    = mean reward over traces weighted by Gaussian similarity
 #
 MEMORY_MAX_TRACES = 20     # FIFO capacity (N_max)
-MEMORY_SIGMA_T = 3.0       # Base Gaussian kernel width in °C
+MEMORY_SIGMA_T = 3.0       # Gaussian kernel width in °C — thermal generalisation
 MEMORY_ALPHA = 0.8         # Weight of G_memory in total G
-MEMORY_GAMMA = 0.5         # Affect-modulated precision sensitivity
 
 # --- Environment Generation ---
 NUM_FOOD_PATCHES = 3
 FOOD_PATCH_AMOUNT_MIN = 30
 FOOD_PATCH_AMOUNT_MAX = 80
-TEMP_BASE_MAX = 28.0       # Temperatura maxima a zonei centrale
-TEMP_SPOT_1 = 14.0         # Temperatura sursei locale 1
-TEMP_SPOT_2 = 12.0         # Temperatura sursei locale 2
+TEMP_BASE_MAX = 28.0
+TEMP_SPOT_1 = 14.0
+TEMP_SPOT_2 = 12.0
 
 # --- Visualization Colors ---
 COLOR_OK = 'white'
@@ -74,8 +73,9 @@ COLOR_DEAD = 'gray'
 COLOR_FOOD = 'lime'
 COLOR_TRAIL = 'orange'
 
+
 # ==========================================
-# Allostatic Agent (OPTIMIZED)
+# Allostatic Agent (with Associative Thermal Memory)
 # ==========================================
 
 class AllostaticAgent(Agent):
@@ -85,9 +85,9 @@ class AllostaticAgent(Agent):
         self.is_alive = True
 
         # Physiology
-        self.T_int = 10.0 # Starts cold
+        self.T_int = 10.0
         self.T_pref = IDEAL_TEMP
-        
+
         self.E_max = MAX_ENERGY
         self.E_int = np.random.uniform(INIT_ENERGY_MIN, INIT_ENERGY_MAX)
         self.E_crit = CRITICAL_ENERGY
@@ -95,12 +95,12 @@ class AllostaticAgent(Agent):
         # FEP Internals
         self.prev_total_error = None
         self.valence_integrated = 0.0
-        self.valence_bound = 2.0  # For dynamic progress bar scaling
+        self.valence_bound = 2.0
         self.current_beta = BETA_BASE
-        
-        # Memory - OPTIMIZED: with batch cleanup
+
+        # Spatial Memory (existing)
         self.visits = {}
-        self.visit_cleanup_counter = 0  # ✅ FIX: Batch cleanup to reduce rehashing
+        self.visit_cleanup_counter = 0
 
         # Social Signaling
         self.food_signal_timer = 0.0
@@ -110,101 +110,33 @@ class AllostaticAgent(Agent):
         # implicit decay as T_int drifts away from stored values over time.
         self.thermal_memory = []
 
-    def update_internal_state(self):
-        if not self.is_alive: return
-
-        x, y = self.pos
-        
-        # 1. Thermal Regulation (Physics)
-        T_env = self.model.temperature[x, y]
-        self.T_int += ETA * (T_env - self.T_int)
-        
-        # 2. Metabolism
-        self.E_int -= METABOLISM
-        
-        # 3. Eating
-        food_available = self.model.food[x, y]
-        if food_available > 0.1 and self.E_int < self.E_max:
-            space_in_stomach = self.E_max - self.E_int
-            intake = min(FOOD_INTAKE, food_available, space_in_stomach)
-            
-            self.E_int += intake
-            self.model.food[x, y] -= intake 
-            
-            # Broadcast food signal and record thermal memory trace
-            if intake > 1.0:
-                self.food_signal_timer = FOOD_SIGNAL_DURATION
-                self._record_feeding(reward=intake)
-        
-        if self.food_signal_timer > 0:
-            self.food_signal_timer -= 1.0
-
-        # 4. Check Death
-        if self.E_int <= 0:
-            self.E_int = 0
-            self.is_alive = False
-            self.current_beta = 0 
-            return 
-
-        # 5. Calculate Valence (Active Inference)
-        err_T = abs(self.T_int - self.T_pref)
-        err_E = max(0, self.E_crit - self.E_int)
-        
-        total_error = (WEIGHT_TEMP * err_T) + (WEIGHT_ENERGY * err_E)
-        
-        if self.prev_total_error is None:
-            self.prev_total_error = total_error
-            
-        inst_valence = -(total_error - self.prev_total_error)
-        self.prev_total_error = total_error
-        
-        # Integrate Mood
-        self.valence_integrated += MU_AFFECT * (inst_valence - self.valence_integrated)
-        
-        # Modulate Precision (ACTION) - COMMENTED OUT AS PER USER REQUEST
-        # to focus on Memory Precision / keeping for reference
-        # factor = np.exp(SIGMA * self.valence_integrated)
-        # self.current_beta = np.clip(BETA_BASE * factor, 0.5, BETA_MAX)
-        self.current_beta = BETA_BASE # Fallback to static base precision
-
-        # Update valence bound for visualization
-        current_abs_valence = abs(self.valence_integrated)
-        if current_abs_valence > self.valence_bound:
-            self.valence_bound = current_abs_valence
-
     # ------------------------------------------
     # Associative Thermal Memory
     # ------------------------------------------
 
     def _memory_value(self, T_query):
         """
-        Cumulative reward sum over thermal memory traces (Sum-KDE).
-        Precision (sigma) is modulated by valence_integrated.
+        Weighted mean reward over thermal memory traces.
 
-        sigma = MEMORY_SIGMA_T * exp(-MEMORY_GAMMA * valence)
-        V_hat(T) = sum_k [ r_k * K(T, T_k) ]
+        V_hat(T) = sum_k [ r_k * K(T, T_k) ] / (sum_k [ K(T, T_k) ] + eps)
+
+        K(T, T_k) = exp(-(T - T_k)^2 / (2 * sigma_T^2))
+
+        Temporal decay is omitted: T_int drifts continuously through
+        thermodynamic exchange, so traces whose T_k is far from the
+        current T_query are already down-weighted by the kernel.
         """
         if not self.thermal_memory:
             return 0.0
 
-        # Solmsian Precision Modulation:
-        # Positive valence (good state) -> narrower kernel (precise memory)
-        # Negative valence (stress/hunger) -> wider kernel (diffuse/desperate generalisation)
-        dynamic_sigma = MEMORY_SIGMA_T * np.exp(-MEMORY_GAMMA * self.valence_integrated)
-        dynamic_sigma = np.clip(dynamic_sigma, 0.5, 10.0) # Stability safety bounds
-
         kernels = np.array([
-            np.exp(-((T_query - T_k) ** 2) / (2.0 * dynamic_sigma ** 2))
+            np.exp(-((T_query - T_k) ** 2) / (2.0 * MEMORY_SIGMA_T ** 2))
             for T_k, _ in self.thermal_memory
         ])
         rewards = np.array([r_k for _, r_k in self.thermal_memory])
-        
-        # New: Sum-based KDE (accumulative)
-        return float((rewards * kernels).sum())
 
-        # Old: Weighted mean (Nadaraya-Watson)
-        # denom = kernels.sum() + 1e-8
-        # return float((rewards * kernels).sum() / denom)
+        denom = kernels.sum() + 1e-8
+        return float((rewards * kernels).sum() / denom)
 
     def _record_feeding(self, reward):
         """
@@ -219,41 +151,91 @@ class AllostaticAgent(Agent):
     # Core Agent Methods
     # ------------------------------------------
 
+    def update_internal_state(self):
+        if not self.is_alive:
+            return
+
+        x, y = self.pos
+
+        # 1. Thermal Regulation (Physics)
+        T_env = self.model.temperature[x, y]
+        self.T_int += ETA * (T_env - self.T_int)
+
+        # 2. Metabolism
+        self.E_int -= METABOLISM
+
+        # 3. Eating
+        food_available = self.model.food[x, y]
+        if food_available > 0.1 and self.E_int < self.E_max:
+            space_in_stomach = self.E_max - self.E_int
+            intake = min(FOOD_INTAKE, food_available, space_in_stomach)
+
+            self.E_int += intake
+            self.model.food[x, y] -= intake
+
+            if intake > 1.0:
+                self.food_signal_timer = FOOD_SIGNAL_DURATION
+                self._record_feeding(reward=intake)  # <-- thermal memory trace
+
+        if self.food_signal_timer > 0:
+            self.food_signal_timer -= 1.0
+
+        # 4. Check Death
+        if self.E_int <= 0:
+            self.E_int = 0
+            self.is_alive = False
+            self.current_beta = 0
+            return
+
+        # 5. Calculate Valence (Active Inference)
+        err_T = abs(self.T_int - self.T_pref)
+        err_E = max(0, self.E_crit - self.E_int)
+        total_error = (WEIGHT_TEMP * err_T) + (WEIGHT_ENERGY * err_E)
+
+        if self.prev_total_error is None:
+            self.prev_total_error = total_error
+
+        inst_valence = -(total_error - self.prev_total_error)
+        self.prev_total_error = total_error
+
+        self.valence_integrated += MU_AFFECT * (inst_valence - self.valence_integrated)
+
+        factor = np.exp(SIGMA * self.valence_integrated)
+        self.current_beta = np.clip(BETA_BASE * factor, 0.5, BETA_MAX)
+
+        current_abs_valence = abs(self.valence_integrated)
+        if current_abs_valence > self.valence_bound:
+            self.valence_bound = current_abs_valence
+
     def manage_memory_and_scent(self):
-        """✅ FIX: Optimized to reduce memory fragmentation on Windows"""
-        if not self.is_alive: return
+        """Optimized to reduce memory fragmentation."""
+        if not self.is_alive:
+            return
         pos = self.pos
-        
-        # A. Personal Memory - Update current position
+
         self.visits[pos] = self.visits.get(pos, 0.0) + 1.0
-        
-        # Shared Memory - Mark global field (Stigmergy)
         self.model.shared_memory[pos[0], pos[1]] += 1.0
-        
-        # Decay all values
+
         for loc in self.visits:
             self.visits[loc] *= MEMORY_DECAY
-        
-        # ✅ FIX: Periodic batch cleanup (not every step)
-        # Reduce rehashing on Windows
+
         self.visit_cleanup_counter += 1
-        if self.visit_cleanup_counter >= 50:  # Cleanup every 50 steps
-            # Recreate dict without keys with small values
+        if self.visit_cleanup_counter >= 50:
             self.visits = {k: v for k, v in self.visits.items() if v >= 0.05}
             self.visit_cleanup_counter = 0
 
-        # B. Social Scent
         if self.food_signal_timer > 0:
-            signal_strength = (self.food_signal_timer / FOOD_SIGNAL_DURATION) * 2.0 
+            signal_strength = (self.food_signal_timer / FOOD_SIGNAL_DURATION) * 2.0
             self.model.food_scent[pos[0], pos[1]] += signal_strength
 
     def choose_action(self):
-        if not self.is_alive: return self.pos
+        if not self.is_alive:
+            return self.pos
 
         x, y = self.pos
-        candidates = self.model.directions + [(0,0)]
+        candidates = self.model.directions + [(0, 0)]
         moves = []
-        scores = [] 
+        scores = []
 
         is_hungry = (self.E_int < self.E_crit)
 
@@ -266,54 +248,43 @@ class AllostaticAgent(Agent):
             T_env_next = self.model.temperature[nx, ny]
             T_pred = self.T_int + ETA * (T_env_next - self.T_int)
             err_T_pred = abs(T_pred - self.T_pref)
-            
+
             food_there = self.model.food[nx, ny]
             intake_pred = 0
             if food_there > 0.1 and (self.E_int - METABOLISM) < self.E_max:
                 intake_pred = min(FOOD_INTAKE, food_there)
             E_pred = self.E_int - METABOLISM + intake_pred
             err_E_pred = max(0, self.E_crit - E_pred)
-            
-            G_pragmatic = - (WEIGHT_TEMP * err_T_pred + WEIGHT_ENERGY * err_E_pred)
-            
-            # --- B. Epistemic Value (AGENCY) ---
-            # Switch to Shared Memory: Agents now avoid/seek where *anyone* has been
+
+            G_pragmatic = -(WEIGHT_TEMP * err_T_pred + WEIGHT_ENERGY * err_E_pred)
+
+            # --- B. Epistemic Value (CURIOSITY) ---
             shared_trace = self.model.shared_memory[nx, ny]
             G_epistemic = 1.0 / (1.0 + EXPLORATION_FACTOR * shared_trace)
-            
+
             # --- C. Social Value ---
             G_social = 0.0
             if is_hungry:
-                scent_val = self.model.food_scent[nx, ny]
-                G_social = SOCIAL_WEIGHT * scent_val 
-            # if is_hungry:
-            #     scent_val = self.model.food_scent[nx, ny]
-            #     # ✅ FIX: Ignoram mirosul de pe pozitia curenta daca nu mai e mancare
-            #     # Altfel agentul ramane blocat in propriul miros dupa ce mananca
-            #     if dx == 0 and dy == 0 and food_there < 0.1:
-            #         G_social = 0.0
-            #     else:
-            #         G_social = SOCIAL_WEIGHT * scent_val 
+                G_social = SOCIAL_WEIGHT * self.model.food_scent[nx, ny]
 
             # --- D. Associative Thermal Memory ---
             # Query memory with the projected T_int after moving to (nx, ny).
-            # T_pred already computed above for G_pragmatic — no extra cost.
-            # Active only when hungry and memory is non-empty.
+            # T_pred already accounts for the thermodynamic step (ETA), so it
+            # is the same quantity used in G_pragmatic — no extra computation.
+            # Active only when hungry; neutral (0) when memory is empty.
             G_memory = 0.0
             if is_hungry and self.thermal_memory:
                 G_memory = -MEMORY_ALPHA * self._memory_value(T_pred)
 
-            # Total G
             G = G_pragmatic + (WEIGHT_EPISTEMIC * G_epistemic) + G_social + G_memory
-            
+
             moves.append((nx, ny))
             scores.append(G)
 
-        # Softmax
         scores = np.array(scores)
         scores_exp = np.exp(self.current_beta * (scores - np.max(scores)))
         probs = scores_exp / np.sum(scores_exp)
-        
+
         idx = np.random.choice(len(moves), p=probs)
         return moves[idx]
 

@@ -120,6 +120,41 @@ def get_plot_figure(model, selected_agent_id=None):
         uid="agents"
     ))
 
+    # 5. Thermal Memory Field — contour lines (isobars) of thermal attraction
+    # Shown only when an agent is selected and has feeding memories.
+    # Contours indicate zones where the agent expects to find food based on T_int context.
+    if selected_agent_id is not None:
+        sel_agent = next((a for a in model.agents if a.unique_id == selected_agent_id), None)
+        if sel_agent and sel_agent.is_alive and sel_agent.thermal_memory:
+            memory_field = np.zeros((model.grid.width, model.grid.height))
+            for x in range(model.grid.width):
+                for y in range(model.grid.height):
+                    memory_field[x, y] = sel_agent._memory_value(model.temperature[x, y])
+            vmax = memory_field.max()
+            if vmax > 1e-6:
+                # Show contours only above 80% of max value — tight focus on peak thermal attraction
+                threshold = vmax * 0.80
+                n_contours = 5
+                fig.add_trace(go.Contour(
+                    z=memory_field.T,
+                    x=np.arange(model.grid.width),
+                    y=np.arange(model.grid.height),
+                    colorscale=[[0, 'rgba(0,200,0,0)'], [1, 'rgba(0,200,0,1)']],
+                    contours=dict(
+                        start=threshold,
+                        end=vmax,
+                        size=(vmax - threshold) / max(n_contours, 1),
+                        showlabels=False,
+                        coloring='lines',  # lines only, no fill
+                    ),
+                    line=dict(width=2),
+                    showscale=False,
+                    hoverinfo='skip',
+                    uid="memory_contour"
+                ))
+
+
+
     # Calculam dimensiunile figurii pentru a mentine aspect ratio corect
     # Inaltimea fixa de 600px, latimea se adapteaza
     plot_height = 600
@@ -325,7 +360,25 @@ def Page():
                 solara.Text(f"Valence (Mood): {agent.valence_integrated:.3f}")
                 bound = max(1.0, agent.valence_bound)
                 ValenceProgressBar(agent.valence_integrated, min_val=-bound, max_val=bound)
-                
+
+                # Thermal Memory
+                solara.HTML(tag="div", style={"height": "15px"})
+                n_traces = len(agent.thermal_memory)
+                solara.Markdown(f"**🧠 Food Memory:** {n_traces} / 20 traces")
+                if n_traces > 0:
+                    # Calculate current dynamic sigma for display
+                    from agents import MEMORY_SIGMA_T, MEMORY_GAMMA
+                    dynamic_sigma = MEMORY_SIGMA_T * np.exp(-MEMORY_GAMMA * agent.valence_integrated)
+                    
+                    contexts = ", ".join(f"{t:.1f}°C" for t, _ in agent.thermal_memory[-5:])
+                    solara.Text(f"Last {min(n_traces, 5)} contexts: {contexts}")
+                    solara.Text(f"Memory Precision (Sigma): {dynamic_sigma:.2f}°C")
+                    avg_reward = sum(r for _, r in agent.thermal_memory) / n_traces
+                    solara.Text(f"Avg reward: {avg_reward:.1f} energy")
+                    solara.Markdown("*🟢 Green overlay = thermal attraction field*")
+                else:
+                    solara.Text("No feeding events recorded yet.")
+
             elif agent and not agent.is_alive:
                 solara.Error(f"Agent {selected_agent_id} is DEAD 💀")
             else:
@@ -370,11 +423,20 @@ def Page():
         $$ H = w\_T |T\_{int} - T\_{pref}| + w\_E \max(0, E\_{crit} - E\_{int}) $$
         """)
 
-        # 3. Math - Active Inference
+        # 3. Active Inference ($G$)
         solara.Markdown("**3. Active Inference ($G$):**")
         solara.Markdown(r"""
         Agents select moves to minimize Expected Free Energy ($G$):
-        $$ G(action) = \underbrace{G\_{pragmatic}}\_{\text{Survival}} + \underbrace{G\_{epistemic}}\_{\text{Curiosity}} + \underbrace{G\_{social}}\_{\text{Swarm}} $$
+        $$ G(a) = G_{pragmatic} + G_{epistemic} + G_{social} + G_{memory} $$
+        """)
+        
+        # 3.1 Associative Memory
+        solara.Markdown("**3.1 Associative Thermal Memory:**")
+        solara.Markdown(r"""
+        Agents remember the internal temperature ($T_{int}$) when finding food.
+        The cumulative attraction $V_{hat}$ is a Sum-KDE:
+        $$ V_{hat}(T) = \sum_{k} r_k \cdot e^{-\frac{(T - T_k)^2}{2\sigma^2}} $$
+        $$ G_{memory}(a) = -\alpha \cdot V_{hat}(T_{pred}^{(a)}) $$
         """)
         
         # 4. Affect and Precision
