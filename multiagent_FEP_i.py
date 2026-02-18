@@ -65,7 +65,7 @@ def get_plot_figure(model, selected_agent_id=None):
     
     fig.add_trace(go.Scatter(
         x=sx, y=sy, mode='markers',
-        marker=dict(color=COLOR_TRAIL, size=ss, opacity=0.4),
+        marker=dict(color=COLOR_TRAIL, size=ss, opacity=0.8),
         name='Trail', hoverinfo='skip', uid="trail"
     ))
 
@@ -367,10 +367,12 @@ def Page():
                 solara.Markdown(f"**🧠 Food Memory:** {n_traces} / 20 traces")
                 if n_traces > 0:
                     contexts = ", ".join(f"{t:.1f}°C" for t, _ in agent.thermal_memory[-5:])
-                    solara.Text(f"Last {min(n_traces, 5)} contexts: {contexts}")
-                    avg_reward = sum(r for _, r in agent.thermal_memory) / n_traces
-                    solara.Text(f"Avg reward: {avg_reward:.1f} energy")
-                    solara.Markdown("*🟢 Green overlay = thermal attraction field*")
+                    solara.Text(f"Last {min(n_traces, 5)} feeding contexts:")
+                    solara.Text(f"{contexts}")
+                    avg_intake = sum(r for _, r in agent.thermal_memory) / n_traces
+                    solara.HTML(tag="br")
+                    solara.Text(f"Avg intake: {avg_intake:.1f} energy")
+                    solara.Markdown("*🟢 Green isolines = thermal attraction field*")
                 else:
                     solara.Text("No feeding events recorded yet.")
 
@@ -421,19 +423,27 @@ def Page():
         # 3. Math - Active Inference
         solara.Markdown("**3. Active Inference ($G$):**")
         solara.Markdown(r"""
-        Agents select moves to minimize Expected Free Energy ($G$):
-        $$ G(action) = \underbrace{G\_{pragmatic}}\_{\text{Survival}} + \underbrace{G\_{epistemic}}\_{\text{Curiosity}} + \underbrace{G\_{social}}\_{\text{Swarm}} $$
+        Agents select moves to minimize Expected Free Energy (G):
+        $$ G(a) = \underbrace{G_{pragmatic}}_{\text{Survival}} + \underbrace{G_{epistemic}}_{\text{Curiosity}} + \underbrace{G_{social}}_{\text{Swarm}} + \underbrace{G_{memory}}_{\text{Experience}} $$
+        """)
+
+        # 4. Associative Thermal Memory
+        solara.Markdown("**4. Associative Thermal Memory ($G_{memory}$):**")
+        solara.Markdown(r"""
+        Sum-KDE favors frequent feeding contexts:
+        $$ V_{hat}(T) = \sum_{k} r_k \cdot e^{-\frac{(T - T_k)^2}{2\sigma^2}} $$
+        $$ G_{memory}(a) = -\alpha \cdot V_{hat}(T_{pred}^{(a)}) $$
         """)
         
-        # 4. Affect and Precision
-        solara.Markdown("**4. Affect and Precision:**")
+        # 5. Affect and Precision
+        solara.Markdown("**5. Affect and Precision:**")
         solara.Markdown(r"""
         Affect (Mood) is the rate of change of the error. This integrated valence determines the agent's Precision β.
         $$\beta_t = -\frac{H_t - H_{t-1}}{\Delta t}$$
         """)
 
-        # 5. Math - Action Selection
-        solara.Markdown("**5. Action Selection:**")
+        # 6. Math - Action Selection
+        solara.Markdown("**6. Action Selection:**")
         solara.Markdown(r"""
         Softmax probability modulated by Precision ($\beta$):
         $$ P(a) = \frac{e^{\beta \cdot G(a)}}{\sum e^{\beta \cdot G(a_i)}} $$

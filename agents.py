@@ -7,9 +7,9 @@ from mesa import Agent
 # ==========================================
 
 # --- Simulation Dimensions ---
-GRID_WIDTH = 80
+GRID_WIDTH = 40
 GRID_HEIGHT = 40
-NUM_AGENTS = 10
+NUM_AGENTS = 5
 SEED = 3 # Set to an integer for reproducibility
 
 # --- Agent Physiology (Life & Death) ---
@@ -50,15 +50,15 @@ SIGMA = 0.8                # Precision sensitivity to affect / Psychosomatic cou
 # Old memories become irrelevant naturally as T_int drifts away from them.
 #
 # G_memory(a) = -alpha * V_hat(T_pred)
-# V_hat(T)    = mean reward over traces weighted by Gaussian similarity
+# V_hat(T)    = mean intake over traces weighted by Gaussian similarity
 #
 MEMORY_MAX_TRACES = 20     # FIFO capacity (N_max)
-MEMORY_SIGMA_T = 1.5       # Gaussian kernel width in °C — tighter thermal generalisation
-MEMORY_ALPHA = 0.8         # Weight of G_memory in total G
+MEMORY_SIGMA_T = 3       # Gaussian kernel width in °C — tighter thermal generalisation
+MEMORY_ALPHA = 1.2         # Weight of G_memory in total G
 # Future: MEMORY_GAMMA = 0.5  # For affect-modulated σ_T: sigma = MEMORY_SIGMA_T * exp(-MEMORY_GAMMA * valence_integrated)
 
 # --- Environment Generation ---
-NUM_FOOD_PATCHES = 3
+NUM_FOOD_PATCHES = 1
 FOOD_PATCH_AMOUNT_MIN = 30
 FOOD_PATCH_AMOUNT_MAX = 80
 TEMP_BASE_MAX = 28.0       # Temperatura maxima a zonei centrale
@@ -105,9 +105,8 @@ class AllostaticAgent(Agent):
         # Social Signaling
         self.food_signal_timer = 0.0
 
-        # Associative Thermal Memory: list of (T_int, reward) pairs.
-        # T_int at eating time is the sole context — thermodynamics handles
-        # implicit decay as T_int drifts away from stored values over time.
+        # Associative Thermal Memory: list of (T_env, intake) pairs.
+        # We store T_env (environment temp) to avoid thermal inertia confusion.
         self.thermal_memory = []
 
     def update_internal_state(self):
@@ -134,7 +133,7 @@ class AllostaticAgent(Agent):
             # Broadcast food signal and record thermal memory trace
             if intake > 1.0:
                 self.food_signal_timer = FOOD_SIGNAL_DURATION
-                self._record_feeding(reward=intake)
+                self._record_feeding(intake=intake, T_context=T_env)
         
         if self.food_signal_timer > 0:
             self.food_signal_timer -= 1.0
@@ -176,7 +175,7 @@ class AllostaticAgent(Agent):
 
     def _memory_value(self, T_query):
         """
-        Weighted mean reward over thermal memory traces.
+        Weighted mean intake over thermal memory traces.
 
         V_hat(T) = sum_k [ r_k * K(T, T_k) ] / (sum_k [ K(T, T_k) ] + eps)
         K(T, T_k) = exp(-(T - T_k)^2 / (2 * sigma_T^2))
@@ -191,18 +190,19 @@ class AllostaticAgent(Agent):
             np.exp(-((T_query - T_k) ** 2) / (2.0 * MEMORY_SIGMA_T ** 2))
             for T_k, _ in self.thermal_memory
         ])
-        rewards = np.array([r_k for _, r_k in self.thermal_memory])
+        intakes = np.array([r_k for _, r_k in self.thermal_memory])
         denom = kernels.sum() + 1e-8
-        return float((rewards * kernels).sum() / denom)
+        return float((intakes * kernels).sum() / denom)
 
-    def _record_feeding(self, reward):
+    def _record_feeding(self, intake, T_context):
         """
-        Store (T_int, reward) at the moment of eating.
+        Store (T_context, intake) at the moment of eating.
+        T_context should be T_env (real temperature) to avoid inertia bias.
         FIFO eviction when capacity N_max is reached.
         """
         if len(self.thermal_memory) >= MEMORY_MAX_TRACES:
             self.thermal_memory.pop(0)
-        self.thermal_memory.append((self.T_int, reward))
+        self.thermal_memory.append((T_context, intake))
 
     # ------------------------------------------
     # Core Agent Methods
@@ -284,12 +284,12 @@ class AllostaticAgent(Agent):
             #     else:
             #         G_social = SOCIAL_WEIGHT * scent_val 
 
-            # --- D. Associative Thermal Memory ---
-            # Query memory with the projected T_int after moving to (nx, ny).
-            # T_pred already computed above for G_pragmatic — no extra cost.
+            # --- D. Associative Theenvironmental temperature of the target cell.
+            # We switched to T_env to avoid thermal inertia confusion.
             # Active only when hungry and memory is non-empty.
             G_memory = 0.0
             if is_hungry and self.thermal_memory:
+                G_memory = -MEMORY_ALPHA * self._memory_value(T_env_next)
                 G_memory = -MEMORY_ALPHA * self._memory_value(T_pred)
 
             # Total G

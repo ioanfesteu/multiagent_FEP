@@ -55,10 +55,17 @@ $$
 Before moving, an agent simulates all possible adjacent steps and calculates the Expected Free Energy ($G$):
 
 $$
-G(action) = \underbrace{G_{pragmatic}}_{\text{Survival}} + \underbrace{G_{epistemic}}_{\text{Curiosity}} + \underbrace{G_{social}}_{\text{Swarm}}
+G(a) = \underbrace{G_{pragmatic}}_{\text{Survival}} + \underbrace{G_{epistemic}}_{\text{Curiosity}} + \underbrace{G_{social}}_{\text{Swarm}} + \underbrace{G_{memory}}_{\text{Experience}}
 $$
 
-#### 3. Affect & Precision ($\beta$)
+#### 3. Associative Thermal Memory ($G_{memory}$)
+
+The agent builds a non-parametric map of its homeostatic successes. A Sum-KDE (Kernel Density Estimation) is used to favor frequent feeding contexts:
+
+$$ V_{hat}(T) = \sum_{k} r_k \cdot e^{-\frac{(T - T_k)^2}{2\sigma^2}} $$
+$$ G_{memory}(a) = -\alpha \cdot V_{hat}(T_{pred}^{(a)}) $$
+
+#### 4. Affect & Precision ($\beta$)
 
 Affect (Mood) is the rate of change of the error. This integrated valence determines the agent's **Precision ($\beta$)**.
 
@@ -69,7 +76,7 @@ $$\beta_t = -\frac{H_t - H_{t-1}}{\Delta t}$$
 
 
 
-#### 4. Action Selection (Softmax)
+#### 5. Action Selection (Softmax)
 
 The agent selects its next move stochastically using a Softmax function modulated by Precision ($\beta$):
 
@@ -130,6 +137,14 @@ Tweaks can be made in *agents.py*.
 At the begining of *agents.py* you will find all the values you can play with and are pretty explanatory I hope. 
 
 Special atention should be payed for *eta*, *mu_affect* and *sigma*. You can find all the explanations in *HOWTO.md*.
+
+---
+
+### 🌡️ Thermal Memory Field
+
+Agents are equipped with an **Associative Thermal Memory**. When they find food, they memorize the environmental temperature of that location. Over time, they build a probabilistic map of "good temperatures".
+
+In the interactive dashboard (`multiagent_FEP_i.py`), you can see this belief system visualized as **Green Isobars** when you select an agent. These contours show where the agent *expects* to find food based on its past experience, guiding its navigation through "thermal surfing".
 
 ---
 
