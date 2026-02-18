@@ -53,9 +53,9 @@ SIGMA = 0.8                # Precision sensitivity to affect / Psychosomatic cou
 # V_hat(T)    = mean reward over traces weighted by Gaussian similarity
 #
 MEMORY_MAX_TRACES = 20     # FIFO capacity (N_max)
-MEMORY_SIGMA_T = 1.5       # Gaussian kernel width in °C — tighter thermal generalisation
+MEMORY_SIGMA_T = 3.0       # Base Gaussian kernel width in °C
 MEMORY_ALPHA = 0.8         # Weight of G_memory in total G
-# Future: MEMORY_GAMMA = 0.5  # For affect-modulated σ_T: sigma = MEMORY_SIGMA_T * exp(-MEMORY_GAMMA * valence_integrated)
+MEMORY_GAMMA = 0.5         # Affect-modulated precision sensitivity
 
 # --- Environment Generation ---
 NUM_FOOD_PATCHES = 3
@@ -161,9 +161,11 @@ class AllostaticAgent(Agent):
         # Integrate Mood
         self.valence_integrated += MU_AFFECT * (inst_valence - self.valence_integrated)
         
-        # Modulate Precision
-        factor = np.exp(SIGMA * self.valence_integrated)
-        self.current_beta = np.clip(BETA_BASE * factor, 0.5, BETA_MAX)
+        # Modulate Precision (ACTION) - COMMENTED OUT AS PER USER REQUEST
+        # to focus on Memory Precision / keeping for reference
+        # factor = np.exp(SIGMA * self.valence_integrated)
+        # self.current_beta = np.clip(BETA_BASE * factor, 0.5, BETA_MAX)
+        self.current_beta = BETA_BASE # Fallback to static base precision
 
         # Update valence bound for visualization
         current_abs_valence = abs(self.valence_integrated)
@@ -176,24 +178,33 @@ class AllostaticAgent(Agent):
 
     def _memory_value(self, T_query):
         """
-        Weighted mean reward over thermal memory traces.
+        Cumulative reward sum over thermal memory traces (Sum-KDE).
+        Precision (sigma) is modulated by valence_integrated.
 
-        V_hat(T) = sum_k [ r_k * K(T, T_k) ] / (sum_k [ K(T, T_k) ] + eps)
-        K(T, T_k) = exp(-(T - T_k)^2 / (2 * sigma_T^2))
-
-        Temporal decay is omitted: T_int drifts continuously through
-        thermodynamic exchange, so traces whose T_k is far from the
-        current T_query are already down-weighted by the kernel.
+        sigma = MEMORY_SIGMA_T * exp(-MEMORY_GAMMA * valence)
+        V_hat(T) = sum_k [ r_k * K(T, T_k) ]
         """
         if not self.thermal_memory:
             return 0.0
+
+        # Solmsian Precision Modulation:
+        # Positive valence (good state) -> narrower kernel (precise memory)
+        # Negative valence (stress/hunger) -> wider kernel (diffuse/desperate generalisation)
+        dynamic_sigma = MEMORY_SIGMA_T * np.exp(-MEMORY_GAMMA * self.valence_integrated)
+        dynamic_sigma = np.clip(dynamic_sigma, 0.5, 10.0) # Stability safety bounds
+
         kernels = np.array([
-            np.exp(-((T_query - T_k) ** 2) / (2.0 * MEMORY_SIGMA_T ** 2))
+            np.exp(-((T_query - T_k) ** 2) / (2.0 * dynamic_sigma ** 2))
             for T_k, _ in self.thermal_memory
         ])
         rewards = np.array([r_k for _, r_k in self.thermal_memory])
-        denom = kernels.sum() + 1e-8
-        return float((rewards * kernels).sum() / denom)
+        
+        # New: Sum-based KDE (accumulative)
+        return float((rewards * kernels).sum())
+
+        # Old: Weighted mean (Nadaraya-Watson)
+        # denom = kernels.sum() + 1e-8
+        # return float((rewards * kernels).sum() / denom)
 
     def _record_feeding(self, reward):
         """
