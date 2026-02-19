@@ -23,7 +23,7 @@ INIT_ENERGY_MAX = 95.0     # Birth energy (max)
 
 # --- Social Dynamics & Trails ---
 SCENT_DECAY = 0.98         # How fast food scent disappears from environment (0-1)
-MEMORY_DECAY = 0.90        # How fast the agent forgets where it has been (0-1)
+MEMORY_DECAY = 0.98        # How fast the agent forgets where it has been (0-1)
 FOOD_SIGNAL_DURATION = 25.0 # How many steps it emits scent after eating
 SOCIAL_WEIGHT = 3.0        # How strongly it is attracted to others' scent (vs exploration)
 
@@ -52,9 +52,9 @@ SIGMA = 0.8                # Precision sensitivity to affect / Psychosomatic cou
 # G_memory(a) = -alpha * V_hat(T_pred)
 # V_hat(T)    = mean intake over traces weighted by Gaussian similarity
 #
-MEMORY_MAX_TRACES = 20     # FIFO capacity (N_max)
-MEMORY_SIGMA_T = 3       # Gaussian kernel width in °C — tighter thermal generalisation
-MEMORY_ALPHA = 1.2         # Weight of G_memory in total G
+MEMORY_MAX_TRACES = 5     # FIFO capacity (N_max)
+MEMORY_SIGMA_T = 6.0     # Gaussian kernel width in °C — wider range to create gradients from afar
+MEMORY_ALPHA = 1.0       # Weight of G_memory (reduced because Sum-KDE produces larger values than Mean-KDE)
 # Future: MEMORY_GAMMA = 0.5  # For affect-modulated σ_T: sigma = MEMORY_SIGMA_T * exp(-MEMORY_GAMMA * valence_integrated)
 
 # --- Environment Generation ---
@@ -175,14 +175,14 @@ class AllostaticAgent(Agent):
 
     def _memory_value(self, T_query):
         """
-        Weighted mean intake over thermal memory traces.
+        Sum of Gaussian kernels (Density Estimation).
+        We switched from Nadaraya-Watson (weighted average) to Sum-KDE.
+        
+        Why? Weighted average creates a flat plateau if only one memory cluster exists
+        (e.g., value is 10.0 everywhere). Sum-KDE creates a peak at the memory 
+        location and decays to zero far away, providing a navigation gradient.
 
-        V_hat(T) = sum_k [ r_k * K(T, T_k) ] / (sum_k [ K(T, T_k) ] + eps)
-        K(T, T_k) = exp(-(T - T_k)^2 / (2 * sigma_T^2))
-
-        Temporal decay is omitted: T_int drifts continuously through
-        thermodynamic exchange, so traces whose T_k is far from the
-        current T_query are already down-weighted by the kernel.
+        V_hat(T) = sum_k [ r_k * exp(-(T - T_k)^2 / (2 * sigma_T^2)) ]
         """
         if not self.thermal_memory:
             return 0.0
@@ -191,8 +191,7 @@ class AllostaticAgent(Agent):
             for T_k, _ in self.thermal_memory
         ])
         intakes = np.array([r_k for _, r_k in self.thermal_memory])
-        denom = kernels.sum() + 1e-8
-        return float((intakes * kernels).sum() / denom)
+        return float((intakes * kernels).sum())
 
     def _record_feeding(self, intake, T_context):
         """
@@ -289,8 +288,7 @@ class AllostaticAgent(Agent):
             # Active only when hungry and memory is non-empty.
             G_memory = 0.0
             if is_hungry and self.thermal_memory:
-                G_memory = -MEMORY_ALPHA * self._memory_value(T_env_next)
-                G_memory = -MEMORY_ALPHA * self._memory_value(T_pred)
+                G_memory = MEMORY_ALPHA * self._memory_value(T_env_next)
 
             # Total G
             G = G_pragmatic + (WEIGHT_EPISTEMIC * G_epistemic) + G_social + G_memory

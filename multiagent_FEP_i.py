@@ -177,6 +177,67 @@ def get_plot_figure(model, selected_agent_id=None):
     
     return fig
 
+def get_memory_distribution_figure(agent, plot_width=None):
+    """
+    Genereaza un grafic 2D (Profil lateral) al memoriei termice.
+    Axa X: Temperatura (0-40 C)
+    Axa Y: Atractivitatea (Valoarea estimata a hranei)
+    """
+    fig = go.Figure()
+    
+    if not agent or not agent.thermal_memory:
+        fig.update_layout(
+            title="No memory traces yet",
+            xaxis_title="Temperature (°C)",
+            yaxis_title="Expected Reward",
+            height=300
+        )
+        return fig
+
+    # 1. Generam curba continua (Suma Gaussianelor)
+    T_range = np.linspace(0, 40, 200)
+    V_values = [agent._memory_value(t) for t in T_range]
+    
+    fig.add_trace(go.Scatter(
+        x=T_range, y=V_values,
+        mode='lines',
+        name='Attraction Field',
+        line=dict(color='green', width=3),
+        fill='tozeroy',
+        fillcolor='rgba(0, 255, 0, 0.1)'
+    ))
+
+    # 2. Afisam amintirile individuale (componentele sumei)
+    # Fiecare bara reprezinta o masa: Pozitia X = Temp, Inaltimea Y = Intake
+    mem_T = [m[0] for m in agent.thermal_memory]
+    mem_I = [m[1] for m in agent.thermal_memory]
+    
+    fig.add_trace(go.Bar(
+        x=mem_T, y=mem_I,
+        width=0.4, # Bare subtiri
+        name='Individual Meals',
+        marker=dict(color='black', opacity=0.5)
+    ))
+
+    fig.update_layout(
+        title=f"Agent {agent.unique_id}: Thermal Memory Profile (Lateral View)",
+        xaxis=dict(title="Temperature (°C)", range=[0, 40]),
+        yaxis=dict(title="Attraction Strength (Intake Sum)"),
+        width=plot_width,  # Setam latimea explicita pentru a se alinia cu harta
+        height=300,
+        margin=dict(l=40, r=40, t=40, b=40),
+        showlegend=True,
+        legend=dict(
+            x=0.01,
+            y=0.99,
+            xanchor="left",
+            yanchor="top",
+            bgcolor="rgba(255, 255, 255, 0.6)"
+        ),
+        plot_bgcolor='white'
+    )
+    return fig
+
 # ==========================================
 # Solara GUI
 # ==========================================
@@ -424,15 +485,19 @@ def Page():
         solara.Markdown("**3. Active Inference ($G$):**")
         solara.Markdown(r"""
         Agents select moves to minimize Expected Free Energy (G):
-        $$ G(a) = \underbrace{G_{pragmatic}}_{\text{Survival}} + \underbrace{G_{epistemic}}_{\text{Curiosity}} + \underbrace{G_{social}}_{\text{Swarm}} + \underbrace{G_{memory}}_{\text{Experience}} $$
+        $$ 
+        G(a) = \underbrace{G_{pragmatic}}_{\text{Survival}} + \underbrace{G_{epistemic}}_{\text{Curiosity}} + \underbrace{G_{social}}_{\text{Swarm}} + \underbrace{G_{memory}}_{\text{Experience}} 
+        $$
         """)
 
         # 4. Associative Thermal Memory
         solara.Markdown("**4. Associative Thermal Memory ($G_{memory}$):**")
         solara.Markdown(r"""
-        Sum-KDE favors frequent feeding contexts:
-        $$ V_{hat}(T) = \sum_{k} r_k \cdot e^{-\frac{(T - T_k)^2}{2\sigma^2}} $$
-        $$ G_{memory}(a) = -\alpha \cdot V_{hat}(T_{pred}^{(a)}) $$
+        The expected intake $\hat{V}$ at a temperature $T$ is the sum of past intakes ($r_k$) weighted by Gaussian proximity.
+        $$ \hat{V}(T) = \sum_{k} r_k \cdot e^{-\frac{(T - T_k)^2}{2\sigma^2}} $$
+        This value then contributes to the Expected Free Energy:
+        $$ G_{memory}(a) = +\alpha \cdot \hat{V}(T_{env\_next}^{(a)}) $$
+        *Note: We use Sum-KDE instead of a weighted average (Nadaraya-Watson) because it creates a true attraction field that decays to zero far from memories, providing a necessary gradient for navigation. A weighted average would create a "plateau" with no gradient.*
         """)
         
         # 5. Affect and Precision
@@ -452,3 +517,14 @@ def Page():
     # Main Area
     fig = get_plot_figure(model, selected_agent_id)
     solara.FigurePlotly(fig, on_click=on_plot_click)
+    
+    # Calculam latimea hartii pentru a o impune si graficului de dedesubt
+    # Aceeasi logica din get_plot_figure: height=600 * aspect_ratio
+    map_width = int(600 * (model.grid.width / model.grid.height))
+
+    # Memory Distribution Plot (Lateral View)
+    if selected_agent_id is not None:
+        agent = next((a for a in model.agents if a.unique_id == selected_agent_id), None)
+        if agent and agent.is_alive:
+            mem_fig = get_memory_distribution_figure(agent, plot_width=map_width)
+            solara.FigurePlotly(mem_fig)
