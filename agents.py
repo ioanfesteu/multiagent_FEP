@@ -7,10 +7,18 @@ from mesa import Agent
 # ==========================================
 
 # --- Simulation Dimensions ---
-GRID_WIDTH = 40
+GRID_WIDTH = 80
 GRID_HEIGHT = 40
 NUM_AGENTS = 5
-SEED = 3 # Set to an integer for reproducibility
+SEED = None # Set to an integer for reproducibility
+
+# --- Environment Generation ---
+NUM_FOOD_PATCHES = 2
+FOOD_PATCH_AMOUNT_MIN = 30
+FOOD_PATCH_AMOUNT_MAX = 80
+TEMP_BASE_MAX = 28.0       # Temperatura maxima a zonei centrale
+TEMP_SPOT_1 = 14.0         # Temperatura sursei locale 1
+TEMP_SPOT_2 = 12.0         # Temperatura sursei locale 2
 
 # --- Agent Physiology (Life & Death) ---
 METABOLISM = 0.15          # Energy consumed per step
@@ -25,9 +33,9 @@ INIT_ENERGY_MAX = 95.0     # Birth energy (max)
 SCENT_DECAY = 0.98         # How fast food scent disappears from environment (0-1)
 MEMORY_DECAY = 0.98        # How fast the agent forgets where it has been (0-1)
 FOOD_SIGNAL_DURATION = 25.0 # How many steps it emits scent after eating
-SOCIAL_WEIGHT = 3.0        # How strongly it is attracted to others' scent (vs exploration)
 
 # --- FEP Brain Parameters (Decision Making) ---
+# NOTE: These are now defaults. Actual values are read from SimConfig to allow UI tuning.
 WEIGHT_TEMP = 1.0          # Importance of thermal comfort
 WEIGHT_ENERGY = 4.0        # Importance of food (high priority)
 BETA_BASE = 6.0            # Base precision (determinism)
@@ -53,17 +61,7 @@ SIGMA = 0.8                # Precision sensitivity to affect / Psychosomatic cou
 # V_hat(T)    = mean intake over traces weighted by Gaussian similarity
 #
 MEMORY_MAX_TRACES = 5     # FIFO capacity (N_max)
-MEMORY_SIGMA_T = 6.0     # Gaussian kernel width in °C — wider range to create gradients from afar
-MEMORY_ALPHA = 1.0       # Weight of G_memory (reduced because Sum-KDE produces larger values than Mean-KDE)
 # Future: MEMORY_GAMMA = 0.5  # For affect-modulated σ_T: sigma = MEMORY_SIGMA_T * exp(-MEMORY_GAMMA * valence_integrated)
-
-# --- Environment Generation ---
-NUM_FOOD_PATCHES = 1
-FOOD_PATCH_AMOUNT_MIN = 30
-FOOD_PATCH_AMOUNT_MAX = 80
-TEMP_BASE_MAX = 28.0       # Temperatura maxima a zonei centrale
-TEMP_SPOT_1 = 14.0         # Temperatura sursei locale 1
-TEMP_SPOT_2 = 12.0         # Temperatura sursei locale 2
 
 # --- Visualization Colors ---
 COLOR_OK = 'white'
@@ -73,6 +71,16 @@ COLOR_HOT = 'red'
 COLOR_DEAD = 'gray'
 COLOR_FOOD = 'lime'
 COLOR_TRAIL = 'orange'
+
+# ==========================================
+# ### DYNAMIC CONFIGURATION ###
+# ==========================================
+class SimConfig:
+    """Holds simulation parameters that can be tweaked in real-time from the UI."""
+    SOCIAL_WEIGHT = 3.0      # G_social weight
+    MEMORY_ALPHA = 1.0       # G_memory weight
+    MEMORY_SIGMA_T = 6.0     # Thermal memory width
+    RANDOM_SEED = None       # For reproducibility
 
 # ==========================================
 # Allostatic Agent (OPTIMIZED)
@@ -187,7 +195,7 @@ class AllostaticAgent(Agent):
         if not self.thermal_memory:
             return 0.0
         kernels = np.array([
-            np.exp(-((T_query - T_k) ** 2) / (2.0 * MEMORY_SIGMA_T ** 2))
+            np.exp(-((T_query - T_k) ** 2) / (2.0 * SimConfig.MEMORY_SIGMA_T ** 2))
             for T_k, _ in self.thermal_memory
         ])
         intakes = np.array([r_k for _, r_k in self.thermal_memory])
@@ -273,7 +281,7 @@ class AllostaticAgent(Agent):
             G_social = 0.0
             if is_hungry:
                 scent_val = self.model.food_scent[nx, ny]
-                G_social = SOCIAL_WEIGHT * scent_val 
+                G_social = SimConfig.SOCIAL_WEIGHT * scent_val 
             # if is_hungry:
             #     scent_val = self.model.food_scent[nx, ny]
             #     # ✅ FIX: Ignoram mirosul de pe pozitia curenta daca nu mai e mancare
@@ -288,7 +296,7 @@ class AllostaticAgent(Agent):
             # Active only when hungry and memory is non-empty.
             G_memory = 0.0
             if is_hungry and self.thermal_memory:
-                G_memory = MEMORY_ALPHA * self._memory_value(T_env_next)
+                G_memory = SimConfig.MEMORY_ALPHA * self._memory_value(T_env_next)
 
             # Total G
             G = G_pragmatic + (WEIGHT_EPISTEMIC * G_epistemic) + G_social + G_memory

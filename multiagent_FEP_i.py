@@ -10,7 +10,7 @@ import asyncio
 # Importam modelul si constantele existente
 from model import DualDriveModel
 from agents import (
-    NUM_AGENTS, COLOR_OK, COLOR_HUNGRY, COLOR_COLD, COLOR_HOT, 
+    NUM_AGENTS, SimConfig, COLOR_OK, COLOR_HUNGRY, COLOR_COLD, COLOR_HOT, 
     COLOR_FOOD, COLOR_TRAIL, WEIGHT_TEMP, WEIGHT_ENERGY, BETA_MAX
 )
 
@@ -275,6 +275,11 @@ def ValenceProgressBar(value, min_val=-5.0, max_val=5.0):
     """)
 
 def create_model():
+    # Apply seed if provided for reproducibility
+    if SimConfig.RANDOM_SEED is not None:
+        np.random.seed(SimConfig.RANDOM_SEED)
+        # Note: If Mesa uses python's random, we should seed that too
+        # import random; random.seed(SimConfig.RANDOM_SEED)
     return DualDriveModel()
 
 @solara.component
@@ -287,6 +292,20 @@ def Page():
     
     # Starea pentru agentul selectat
     selected_agent_id, set_selected_agent_id = solara.use_state(None)
+
+    # Starea pentru parametrii dinamici
+    seed_val, set_seed_val = solara.use_state(42)
+    use_seed, set_use_seed = solara.use_state(False)
+    
+    # Actualizam configuratia globala cand se schimba sliderele (fara re-render complet la model)
+    # Folosim variabile locale pentru slidere pentru a forta update-ul SimConfig
+    social_w, set_social_w = solara.use_state(SimConfig.SOCIAL_WEIGHT)
+    memory_a, set_memory_a = solara.use_state(SimConfig.MEMORY_ALPHA)
+
+    # Update config on change
+    SimConfig.SOCIAL_WEIGHT = social_w
+    SimConfig.MEMORY_ALPHA = memory_a
+    SimConfig.RANDOM_SEED = seed_val if use_seed else None
 
     # --- Simulation Loop ---
     def run_loop():
@@ -383,6 +402,25 @@ def Page():
             solara.Button("Reset", on_click=on_reset, color="error")
             solara.Button("Export CSV", on_click=on_export, color="primary", outlined=True)
             
+        solara.Markdown("### 🔬 Experimental Controls")
+        with solara.Card("Ablation Study & Reproducibility"):
+            # Seed Control
+            solara.Checkbox(label="Fixed Seed (Reproducibility)", value=use_seed, on_value=set_use_seed)
+            if use_seed:
+                solara.InputInt("Seed Value", value=seed_val, on_value=set_seed_val)
+                solara.Text("Note: Press RESET to apply seed change.", style={"font-size": "10px", "color": "gray"})
+            
+            solara.Markdown("---")
+            
+            # Dynamic Weights
+            solara.Markdown(f"**Social Weight ($G_{{social}}$):** {social_w:.1f}")
+            solara.SliderFloat(label="", value=social_w, min=0.0, max=10.0, step=0.1, on_value=set_social_w)
+            if social_w == 0: solara.Text("⚠️ Social instinct INHIBITED", style={"color": "red", "font-size": "11px"})
+
+            solara.Markdown(f"**Memory Alpha ($G_{{memory}}$):** {memory_a:.1f}")
+            solara.SliderFloat(label="", value=memory_a, min=0.0, max=5.0, step=0.1, on_value=set_memory_a)
+            if memory_a == 0: solara.Text("⚠️ Memory recall INHIBITED", style={"color": "red", "font-size": "11px"})
+
             
         solara.Markdown("---")
         
@@ -485,9 +523,11 @@ def Page():
         solara.Markdown("**3. Active Inference ($G$):**")
         solara.Markdown(r"""
         Agents select moves to minimize Expected Free Energy (G):
-        $$ 
-        G(a) = \underbrace{G_{pragmatic}}_{\text{Survival}} + \underbrace{G_{epistemic}}_{\text{Curiosity}} + \underbrace{G_{social}}_{\text{Swarm}} + \underbrace{G_{memory}}_{\text{Experience}} 
-        $$
+        $$ G(a) = G_{pragmatic} + G_{epistemic} + G_{social} + G_{memory} $$
+        *$\underbrace{G_{pragmatic}}_{\text{Survival}}$ : Homeostasis*
+        *$\underbrace{G_{epistemic}}_{\text{Curiosity}}$ : Exploration*
+        *$\underbrace{G_{social}}_{\text{Swarm}}$ : Scent trails*
+        *$\underbrace{G_{memory}}_{\text{Experience}}$ : Thermal memory*
         """)
 
         # 4. Associative Thermal Memory

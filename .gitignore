@@ -43,3 +43,4 @@ multiagent_interactive.py
 docs/sisteme_fizice_active_inference.md
 PLAN_IMPLEMENTARE_LLM_CARETAKER.md
 agents_simplified.py
+GliderAgent.py
