@@ -402,24 +402,24 @@ def Page():
             solara.Button("Reset", on_click=on_reset, color="error")
             solara.Button("Export CSV", on_click=on_export, color="primary", outlined=True)
             
-        solara.Markdown("### 🔬 Experimental Controls")
-        with solara.Card("Ablation Study & Reproducibility"):
-            # Seed Control
-            solara.Checkbox(label="Fixed Seed (Reproducibility)", value=use_seed, on_value=set_use_seed)
-            if use_seed:
-                solara.InputInt("Seed Value", value=seed_val, on_value=set_seed_val)
-                solara.Text("Note: Press RESET to apply seed change.", style={"font-size": "10px", "color": "gray"})
+        # solara.Markdown("### 🔬 Experimental Controls")
+        # with solara.Card("Ablation Study & Reproducibility"):
+        # Seed Control
+        solara.Checkbox(label="Fixed Seed (Reproducibility)", value=use_seed, on_value=set_use_seed)
+        if use_seed:
+            solara.InputInt("Seed Value", value=seed_val, on_value=set_seed_val)
+            solara.Text("Note: Press RESET to apply seed change.", style={"font-size": "10px", "color": "gray"})
             
-            solara.Markdown("---")
+            # solara.Markdown("---")
             
-            # Dynamic Weights
-            solara.Markdown(f"**Social Weight ($G_{{social}}$):** {social_w:.1f}")
-            solara.SliderFloat(label="", value=social_w, min=0.0, max=10.0, step=0.1, on_value=set_social_w)
-            if social_w == 0: solara.Text("⚠️ Social instinct INHIBITED", style={"color": "red", "font-size": "11px"})
+        # Dynamic Weights
+        # solara.Markdown(f"**Social Weight ($G_{{social}}$):** {social_w:.1f}")
+        # solara.SliderFloat(label="", value=social_w, min=0.0, max=10.0, step=0.1, on_value=set_social_w)
+        # if social_w == 0: solara.Text("⚠️ Social instinct INHIBITED", style={"color": "red", "font-size": "11px"})
 
-            solara.Markdown(f"**Memory Alpha ($G_{{memory}}$):** {memory_a:.1f}")
-            solara.SliderFloat(label="", value=memory_a, min=0.0, max=5.0, step=0.1, on_value=set_memory_a)
-            if memory_a == 0: solara.Text("⚠️ Memory recall INHIBITED", style={"color": "red", "font-size": "11px"})
+        # solara.Markdown(f"**Memory Alpha ($G_{{memory}}$):** {memory_a:.1f}")
+        # solara.SliderFloat(label="", value=memory_a, min=0.0, max=5.0, step=0.1, on_value=set_memory_a)
+        # if memory_a == 0: solara.Text("⚠️ Memory recall INHIBITED", style={"color": "red", "font-size": "11px"})
 
             
         solara.Markdown("---")

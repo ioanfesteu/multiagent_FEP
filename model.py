@@ -7,6 +7,7 @@ from agents import (
     AllostaticAgent, 
     GRID_WIDTH, GRID_HEIGHT, NUM_AGENTS, SEED,
     NUM_FOOD_PATCHES, FOOD_PATCH_AMOUNT_MIN, FOOD_PATCH_AMOUNT_MAX,
+    FOOD_REGROWTH_RATE,
     SCENT_DECAY, MEMORY_DECAY,
     TEMP_BASE_MAX, TEMP_SPOT_1, TEMP_SPOT_2
 )
@@ -53,6 +54,9 @@ class DualDriveModel(Model):
         # Fields
         self.temperature = generate_temperature_field(width, height)
         self.food = generate_food_field(width, height, n_patches=NUM_FOOD_PATCHES)
+        
+        # Save the initial food distribution as the maximum capacity for regrowth
+        self.food_capacity = self.food.copy()
         
         # Global Scent
         self.food_scent = np.zeros((width, height)) 
@@ -115,6 +119,13 @@ class DualDriveModel(Model):
         # ✅ FIX: Optimized to reduce NumPy temporaries on Windows
         np.multiply(self.food_scent, SCENT_DECAY, out=self.food_scent)
         np.putmask(self.food_scent, self.food_scent < 0.05, 0)
+        
+        # 3. Food Regrowth (Nature fights back)
+        # Add regrowth rate only where capacity > 0 (implicit by the minimum logic below, 
+        # but adding everywhere is safe if we clip to capacity immediately)
+        self.food += FOOD_REGROWTH_RATE
+        # Clip food to not exceed the initial capacity (max potential of the patch)
+        np.minimum(self.food, self.food_capacity, out=self.food)
         
         # Decay Shared Memory
         np.multiply(self.shared_memory, MEMORY_DECAY, out=self.shared_memory)

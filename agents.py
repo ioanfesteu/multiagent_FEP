@@ -7,15 +7,16 @@ from mesa import Agent
 # ==========================================
 
 # --- Simulation Dimensions ---
-GRID_WIDTH = 80
+GRID_WIDTH = 40
 GRID_HEIGHT = 40
 NUM_AGENTS = 5
 SEED = None # Set to an integer for reproducibility
 
 # --- Environment Generation ---
-NUM_FOOD_PATCHES = 2
+NUM_FOOD_PATCHES = 1
 FOOD_PATCH_AMOUNT_MIN = 30
 FOOD_PATCH_AMOUNT_MAX = 80
+FOOD_REGROWTH_RATE = 0.01   # Cantitatea de hrana regenerata per step
 TEMP_BASE_MAX = 28.0       # Temperatura maxima a zonei centrale
 TEMP_SPOT_1 = 14.0         # Temperatura sursei locale 1
 TEMP_SPOT_2 = 12.0         # Temperatura sursei locale 2
@@ -247,7 +248,8 @@ class AllostaticAgent(Agent):
         if not self.is_alive: return self.pos
 
         x, y = self.pos
-        candidates = self.model.directions + [(0,0)]
+        # candidates = self.model.directions + [(0,0)]
+        candidates = self.model.directions # No "stay put" option to encourage movement
         moves = []
         scores = [] 
 

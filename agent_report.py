@@ -32,12 +32,29 @@ def generate_temperature_field(width, height):
 def create_report(agent_id, df_agent, temp_field):
     steps = df_agent['Step']
 
-    # ── Figure 1: World Map ──────────────────────────────────────────────────
-    # With aspect='equal', matplotlib auto-sizes the figure height so the
-    # 80x40 grid is rendered proportionally (2:1). We set a fixed width of 12".
-    fig_map, ax_map = plt.subplots(1, 1, figsize=(12, 6))
-    fig_map.suptitle(f"Agent {agent_id} — World Map Trajectory", fontsize=16, fontweight='bold')
+    # ── Single Figure Setup ──────────────────────────────────────────────────
+    # We calculate a figure height that accommodates the map (keeping aspect ratio)
+    # plus the two charts below it.
+    # Map aspect ratio = Height / Width.
+    map_aspect = GRID_HEIGHT / GRID_WIDTH
+    fig_width = 8
+    
+    # Calculate heights to ensure map fills the width
+    map_height_inches = fig_width * map_aspect
+    chart_height_inches = 3.0
+    
+    # Total figure height including charts and some padding
+    fig_height = map_height_inches + (2 * chart_height_inches) + 1
+    
+    fig = plt.figure(figsize=(fig_width, fig_height), constrained_layout=True)
+    fig.suptitle(f"Agent {agent_id} — Integrated Report", fontsize=16, fontweight='bold')
+    
+    # Create a grid: 3 rows, 1 column. 
+    # Adjust height ratios so the map slot matches its aspect ratio requirements
+    gs = fig.add_gridspec(3, 1, height_ratios=[map_height_inches, chart_height_inches, chart_height_inches])
 
+    # ── Subplot 1: World Map ─────────────────────────────────────────────────
+    ax_map = fig.add_subplot(gs[0])
     im = ax_map.imshow(temp_field.T, origin='lower', cmap='plasma', alpha=0.6,
                        extent=[0, GRID_WIDTH, 0, GRID_HEIGHT], aspect='equal')
     ax_map.plot(df_agent['X'], df_agent['Y'], color='white', linewidth=1.5, alpha=0.9, label='Path')
@@ -45,27 +62,23 @@ def create_report(agent_id, df_agent, temp_field):
                    color='green', s=80, label='Start', zorder=5)
     ax_map.scatter(df_agent['X'].iloc[-1], df_agent['Y'].iloc[-1],
                    color='red', s=80, label='End/Death', zorder=5)
+    ax_map.set_title("World Map Trajectory (Temperature Field)", fontsize=12)
     ax_map.set_xlabel("X coordinate")
     ax_map.set_ylabel("Y coordinate")
-    ax_map.legend()
-    fig_map.colorbar(im, ax=ax_map, label='Temperature (°C)', fraction=0.023, pad=0.04)
-    fig_map.tight_layout()
+    ax_map.legend(loc='upper right')
+    fig.colorbar(im, ax=ax_map, label='Temperature (°C)', fraction=0.02, pad=0.04)
 
-    # ── Figure 2: Parameter Charts ───────────────────────────────────────────
-    fig_charts, (ax2, ax3) = plt.subplots(2, 1, figsize=(12, 8))
-    fig_charts.suptitle(f"Agent {agent_id} — Parameter Evolution", fontsize=16, fontweight='bold')
-
-    # Energy and Temperature
+    # ── Subplot 2: Physiological States ──────────────────────────────────────
+    ax2 = fig.add_subplot(gs[1])
     ax2.plot(steps, df_agent['Energy'], color='blue', linewidth=2, label='Energy')
     ax2.plot(steps, df_agent['Temp'], color='orange', linewidth=2, label='Agent Temperature')
     ax2.set_title("Physiological States: Energy and internal Temperature", fontsize=13)
-    ax2.set_xlabel("Step")
     ax2.set_ylabel("Levels")
     ax2.legend()
     ax2.grid(True, linestyle='--', alpha=0.6)
 
-    # Valence (relative to 0) — primary mood indicator
-    # Beta (Precision) is derived from Valence via exp(σ·V) and modulates Softmax internally
+    # ── Subplot 3: Cognitive State ───────────────────────────────────────────
+    ax3 = fig.add_subplot(gs[2], sharex=ax2)
     ax3.plot(steps, df_agent['Valence'], color='green', linewidth=2, label='Valence (Mood)')
     ax3.axhline(0, color='black', linewidth=1, linestyle='-', alpha=0.5)
     ax3.set_title("Cognitive State: Integrated Valence (Mood)", fontsize=13)
@@ -73,8 +86,6 @@ def create_report(agent_id, df_agent, temp_field):
     ax3.set_ylabel("Valence Value")
     ax3.legend()
     ax3.grid(True, linestyle='--', alpha=0.6)
-
-    fig_charts.tight_layout(rect=[0, 0, 1, 0.96])
 
 def main():
     csv_file = 'fep_swarm_agent_data.csv'
