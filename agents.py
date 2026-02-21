@@ -37,11 +37,24 @@ FOOD_SIGNAL_DURATION = 25.0 # How many steps it emits scent after eating
 
 # --- FEP Brain Parameters (Decision Making) ---
 # NOTE: These are now defaults. Actual values are read from SimConfig to allow UI tuning.
-WEIGHT_TEMP = 1.0          # Importance of thermal comfort
-WEIGHT_ENERGY = 4.0        # Importance of food (high priority)
-BETA_BASE = 6.0            # Base precision (determinism)
+
+# --- NIVEL 1 (Autonom) ---
+WEIGHT_PRAGMATIC = 1.0     
+WEIGHT_EPISTEMIC = 2.0     
+WEIGHT_TEMP = 1.0          # Sub-weight for Pragmatic
+WEIGHT_ENERGY = 4.0        # Sub-weight for Pragmatic
+
+# --- NIVEL 2 (Socio-Cognitiv) ---
+SOCIAL_WEIGHT = 3.0        
+MEMORY_WEIGHT = 0.8         
+
+# --- PARAMETRI AFECT & PRECIZIE ---
+AROUSAL_SCALING = 5.0      # Multiplicator pentru intervenția Nivelului 2
+BASE_PRECISION = 2.0       # (\beta_0) Încrederea de bază
+BETA_SENSITIVITY = 1.0     # Cât de mult modifică valența precizia
+
+BETA_BASE = BASE_PRECISION # Alias for backward compatibility
 BETA_MAX = 30.0            # Maximum precision (clipping)
-WEIGHT_EPISTEMIC = 1.5     # Importance of curiosity (Agency/Exploration). Curiosity vs. Survival (G_pragmatic) vs. Socializing (G_social)
 EXPLORATION_FACTOR = 10.0  # Boredom resistance (high value = avoids repetition)
 
 # --- Psycho-behavioral Parameters ---
@@ -78,8 +91,10 @@ COLOR_TRAIL = 'orange'
 # ==========================================
 class SimConfig:
     """Holds simulation parameters that can be tweaked in real-time from the UI."""
-    SOCIAL_WEIGHT = 3.0      # G_social weight
-    MEMORY_ALPHA = 1.0       # G_memory weight
+    WEIGHT_PRAGMATIC = WEIGHT_PRAGMATIC # G_pragmatic weight
+    WEIGHT_EPISTEMIC = WEIGHT_EPISTEMIC # G_epistemic weight
+    SOCIAL_WEIGHT = SOCIAL_WEIGHT      # G_social weight
+    MEMORY_WEIGHT = MEMORY_WEIGHT      # G_memory weight
     MEMORY_SIGMA_T = 6.0     # Thermal memory width
     RANDOM_SEED = None       # For reproducibility
 
@@ -102,8 +117,10 @@ class AllostaticAgent(Agent):
         self.E_crit = CRITICAL_ENERGY
 
         # FEP Internals
-        self.prev_total_error = None
-        self.valence_integrated = 0.0
+        self.current_homeostatic_error = 0.0
+        self.prev_homeostatic_error = 0.0
+        self.valence = 0.0             # Starea afectivă (+/-)
+        self.affective_arousal = 0.0   # Intensitatea stării (Alertă/Panic)
         self.valence_bound = 2.0  # For dynamic progress bar scaling
         self.current_beta = BETA_BASE
         
@@ -154,27 +171,30 @@ class AllostaticAgent(Agent):
             self.current_beta = 0 
             return 
 
-        # 5. Calculate Valence (Active Inference)
+        # 5. Calculate Internal State (Phase 3: Valence & Arousal)
         err_T = abs(self.T_int - self.T_pref)
         err_E = max(0, self.E_crit - self.E_int)
         
-        total_error = (WEIGHT_TEMP * err_T) + (WEIGHT_ENERGY * err_E)
+        # H_t: Eroarea homeostatică totală
+        self.current_homeostatic_error = (WEIGHT_TEMP * err_T) + (WEIGHT_ENERGY * err_E)
         
-        if self.prev_total_error is None:
-            self.prev_total_error = total_error
-            
-        inst_valence = -(total_error - self.prev_total_error)
-        self.prev_total_error = total_error
+        # Valence: Derivata negativă a erorii (lucrurile merg bine vs rău)
+        # Smoothing: 0.7 * old + 0.3 * new
+        delta_H = self.current_homeostatic_error - self.prev_homeostatic_error
+        self.valence = (1.0 - MU_AFFECT) * self.valence + MU_AFFECT * (-delta_H)
         
-        # Integrate Mood
-        self.valence_integrated += MU_AFFECT * (inst_valence - self.valence_integrated)
+        self.prev_homeostatic_error = self.current_homeostatic_error
         
-        # Modulate Precision
-        factor = np.exp(SIGMA * self.valence_integrated)
+        # Arousal: Crește când eroarea e mare (stres) sau când valența e negativă (panică)
+        # Formula euristică: Eroarea curentă + Bonus de panică dacă valența scade
+        self.affective_arousal = self.current_homeostatic_error * (1.0 + max(0, -self.valence * 2.0))
+        
+        # Modulate Precision (Beta) based on Valence
+        factor = np.exp(SIGMA * self.valence)
         self.current_beta = np.clip(BETA_BASE * factor, 0.5, BETA_MAX)
 
         # Update valence bound for visualization
-        current_abs_valence = abs(self.valence_integrated)
+        current_abs_valence = abs(self.valence)
         if current_abs_valence > self.valence_bound:
             self.valence_bound = current_abs_valence
 
@@ -253,14 +273,21 @@ class AllostaticAgent(Agent):
         moves = []
         scores = [] 
 
-        is_hungry = (self.E_int < self.E_crit)
+        # Starea de foame este un factor decizional cheie pentru Nivelul 2
+        is_hungry = self.E_int < self.E_crit
 
         for dx, dy in candidates:
             nx, ny = x + dx, y + dy
             if self.model.grid.out_of_bounds((nx, ny)):
                 continue
 
-            # --- A. Pragmatic Value (SURVIVAL) ---
+            # =================================================
+            # PHASE 4: NESTED ACTIVE INFERENCE
+            # =================================================
+
+            # --- NIVEL 1: AUTONOM (Base G) ---
+            
+            # 1. G_pragmatic (Supravietuire / Homeostazie)
             T_env_next = self.model.temperature[nx, ny]
             T_pred = self.T_int + ETA * (T_env_next - self.T_int)
             err_T_pred = abs(T_pred - self.T_pref)
@@ -272,39 +299,43 @@ class AllostaticAgent(Agent):
             E_pred = self.E_int - METABOLISM + intake_pred
             err_E_pred = max(0, self.E_crit - E_pred)
             
-            G_pragmatic = - (WEIGHT_TEMP * err_T_pred + WEIGHT_ENERGY * err_E_pred)
+            # Notă: G e negativ (cost), deci folosim minus
+            term_pragmatic = - (WEIGHT_TEMP * err_T_pred + WEIGHT_ENERGY * err_E_pred)
+            G_pragmatic = SimConfig.WEIGHT_PRAGMATIC * term_pragmatic
             
-            # --- B. Epistemic Value (AGENCY) ---
-            # Switch to Shared Memory: Agents now avoid/seek where *anyone* has been
+            # 2. G_epistemic (Curiozitate / Explorare)
+            # Evităm locurile deja vizitate de roi (Shared Memory)
             shared_trace = self.model.shared_memory[nx, ny]
-            G_epistemic = 1.0 / (1.0 + EXPLORATION_FACTOR * shared_trace)
+            term_epistemic = 1.0 / (1.0 + EXPLORATION_FACTOR * shared_trace)
+            G_epistemic = SimConfig.WEIGHT_EPISTEMIC * term_epistemic
             
-            # --- C. Social Value ---
-            G_social = 0.0
-            if is_hungry:
+            # Integrare Nivel 1
+            G_base = G_pragmatic + G_epistemic
+
+            # --- NIVEL 2: SOCIO-COGNITIV (Top-Down Modulation) ---
+            # Se activează doar dacă Arousal-ul este ridicat (stres/nevoie)
+            
+            G_higher_top_down = 0.0
+            
+            # MODIFICARE CHEIE: Nivelul 2 (socio-cognitiv) se activează doar dacă agentului îi este FOAME și este stresat (Arousal > 0)
+            if is_hungry and self.affective_arousal > 0.1:
+                # G_social (Feromoni)
                 scent_val = self.model.food_scent[nx, ny]
-                G_social = SimConfig.SOCIAL_WEIGHT * scent_val 
-            # if is_hungry:
-            #     scent_val = self.model.food_scent[nx, ny]
-            #     # ✅ FIX: Ignoram mirosul de pe pozitia curenta daca nu mai e mancare
-            #     # Altfel agentul ramane blocat in propriul miros dupa ce mananca
-            #     if dx == 0 and dy == 0 and food_there < 0.1:
-            #         G_social = 0.0
-            #     else:
-            #         G_social = SOCIAL_WEIGHT * scent_val 
+                term_social = SimConfig.SOCIAL_WEIGHT * scent_val
+                
+                # G_memory (Memorie Termică Asociativă)
+                term_memory = 0.0
+                if self.thermal_memory:
+                    term_memory = SimConfig.MEMORY_WEIGHT * self._memory_value(T_env_next)
+                
+                # Modulare prin Arousal: Cu cât ești mai stresat, cu atât asculți mai mult de grup și memorie
+                G_higher_top_down = (self.affective_arousal * AROUSAL_SCALING) * (term_social + term_memory)
 
-            # --- D. Associative Theenvironmental temperature of the target cell.
-            # We switched to T_env to avoid thermal inertia confusion.
-            # Active only when hungry and memory is non-empty.
-            G_memory = 0.0
-            if is_hungry and self.thermal_memory:
-                G_memory = SimConfig.MEMORY_ALPHA * self._memory_value(T_env_next)
-
-            # Total G
-            G = G_pragmatic + (WEIGHT_EPISTEMIC * G_epistemic) + G_social + G_memory
+            # --- INTEGRARE TOTALĂ ---
+            G_total = G_base + G_higher_top_down
             
             moves.append((nx, ny))
-            scores.append(G)
+            scores.append(G_total)
 
         # Softmax
         scores = np.array(scores)
