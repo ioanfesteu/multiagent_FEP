@@ -52,37 +52,50 @@ $$
 
 #### 2. Active Inference ($G$)
 
-Before moving, an agent simulates all possible adjacent steps and calculates the Expected Free Energy ($G$):
+The agent's decision-making is modeled as a **nested hierarchy** of inference, activated by affective states. This ensures computational efficiency, as higher-level cognition is only engaged when necessary.
 
-$$
-G(a) = \underbrace{G_{pragmatic}}_{\text{Survival}} + \underbrace{G_{epistemic}}_{\text{Curiosity}} + \underbrace{G_{social}}_{\text{Swarm}} + \underbrace{G_{memory}}_{\text{Experience}}
-$$
+1.  **Level 1 (Autonomous Drive):** The default state, focused on immediate survival and exploration.
+    $$ G_{base}(a) = \underbrace{G_{pragmatic}(a)}_{\text{Survival}} + \underbrace{G_{epistemic}(a)}_{\text{Curiosity}} $$
 
-#### 3. Associative Thermal Memory ($G_{memory}$)
+2.  **Level 2 (Socio-Cognitive Drive):** This higher level is engaged only when **Arousal** (stress/need) is high. It represents focused, goal-directed thinking (e.g., "I am hungry, I must follow scents and memories of food").
+    $$ G_{mod}(a) = \text{Arousal} \cdot \alpha \cdot \left( \underbrace{G_{social}(a)}_{\text{Pheromones}} + \underbrace{G_{memory}(a)}_{\text{Experience}} \right) $$
 
-The agent builds a non-parametric map of its homeostatic successes. A Sum-KDE (Kernel Density Estimation) is used to favor frequent feeding contexts:
+3.  **Total Expected Free Energy:** The final policy is chosen by minimizing the total G.
+    $$ G_{total}(a) = G_{base}(a) + G_{mod}(a) $$
 
-$$ V_{hat}(T) = \sum_{k} r_k \cdot e^{-\frac{(T - T_k)^2}{2\sigma^2}} $$
-$$ G_{memory}(a) = -\alpha \cdot V_{hat}(T_{pred}^{(a)}) $$
+This nested structure ensures that agents don't waste cognitive resources on complex social and memory-based navigation when their basic needs are met. High arousal acts as a switch, bringing these more sophisticated strategies online.
+
+#### 3. Associative Thermal Memory (Linear Receptive Fields)
+
+The agent builds a map of its homeostatic successes. Instead of a computationally expensive Sum-KDE (Gaussian kernels), we use a neuromorphic approximation with **linear receptive fields** (triangular kernels). This is significantly faster.
+
+The expected reward $\hat{V}$ for a given temperature $T$ is the sum of past rewards ($r_k$), weighted by linear proximity.
+
+$$ \hat{V}(T) = \sum_{k} r_k \cdot \max\left(0, 1 - \frac{|T - T_k|}{\sigma_T}\right) $$
+
+Here, $\sigma_T$ acts as the "radius" of the receptive field. This value contributes to the Expected Free Energy, attracting the agent towards familiar thermal contexts.
 
 #### 4. Affect & Precision ($\beta$)
 
-Affect (Mood) is the rate of change of the error. This integrated valence determines the agent's **Precision ($\beta$)**.
+Affect (Valence) is the rate of change of the homeostatic error. This value modulates the agent's **Precision ($\beta$)**, which represents its confidence in its predictions.
 
-$$\beta_t = -\frac{H_t - H_{t-1}}{\Delta t}$$
+$$ \text{valence}_t \approx -(H_t - H_{t-1}) $$
 
-* **Positive Affect:** Error is decreasing ($H_t < H_{t-1}$), leading to a **High $\beta$** (decisive behavior).
-* **Negative Affect:** Error is increasing ($H_t > H_{t-1}$), leading to a **Low $\beta$** (volatile or exploratory behavior).
+The precision is then updated using a fast, linear approximation instead of an exponential function:
 
+$$ \beta_t \propto \beta_0 \cdot (1 + \sigma \cdot \text{valence}_t) $$
 
+* **Positive Valence:** Error is decreasing, leading to a **High $\beta$** (exploitation, decisive behavior).
+* **Negative Valence:** Error is increasing, leading to a **Low $\beta$** (exploration, volatile behavior).
 
-#### 5. Action Selection (Softmax)
+#### 5. Action Selection (Winner-Takes-All)
 
-The agent selects its next move stochastically using a Softmax function modulated by Precision ($\beta$):
+Instead of a classic Softmax, action selection is modeled as a **neuromorphic Winner-Takes-All (WTA) circuit with noise**. Precision ($\beta$) acts as a noise inhibitor.
 
-$$
-P(a) = \frac{e^{\beta \cdot G(a)}}{\sum_{i} e^{\beta \cdot G(a_i)}}
-$$
+$$ \text{Action} = \arg\max_a \left( G(a) + \mathcal{U}\left(-\frac{1}{\beta}, \frac{1}{\beta}\right) \right) $$
+
+* **High $\beta$** (high confidence) leads to low noise, and the agent chooses the action with the best expected outcome ($G(a)$).
+* **Low $\beta$** (low confidence) leads to high noise, making the agent's choice more random and exploratory.
 
 ---
 

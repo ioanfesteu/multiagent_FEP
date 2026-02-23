@@ -6,6 +6,7 @@ import solara
 import matplotlib.pyplot as plt
 import numpy as np
 import asyncio
+from matplotlib.figure import Figure
 
 # Setam backend-ul Matplotlib pentru a evita problemele de thread pe Windows
 import matplotlib
@@ -56,8 +57,8 @@ def ValenceProgressBar(value, min_val=-2.5, max_val=2.5):
 # VIZUALIZARE (MATPLOTLIB)
 # ==========================================
 
-def get_plot_figure(model, selected_agent_id=None):
-    fig = plt.figure(figsize=(6, 6))
+def get_plot_figure(model, selected_agent_id=None, show_contours=True):
+    fig = Figure(figsize=(6, 6))
     ax = fig.add_subplot(111)
     
     # 1. Temperatura (Background)
@@ -87,6 +88,32 @@ def get_plot_figure(model, selected_agent_id=None):
     if sx:
         ax.scatter(sx, sy, c='gold', s=ss, alpha=0.6, marker='.', label='Scent')
 
+    # 1.3 Thermal Memory Overlay (Doar pentru agentul selectat)
+    if show_contours and selected_agent_id is not None:
+        agent = next((a for a in model.agents if a.unique_id == selected_agent_id), None)
+        
+        # Verificam daca agentul exista si are amintiri
+        if agent and hasattr(agent, 'thermal_memory') and agent.thermal_memory:
+            # Preluam sigma din configuratie
+            sigma = getattr(SimConfig, 'MEMORY_SIGMA_T', 6.0)
+            
+            # Initializam campul de memorie (dimensiunea gridului)
+            mem_field = np.zeros_like(model.temperature)
+            
+            # Calculam suma Gaussianelor pentru fiecare amintire (Vectorizat)
+            # V_hat(T) = sum(r_k * exp(-(T_grid - T_k)^2 / 2sigma^2))
+            for t_k, r_k in agent.thermal_memory:
+                diff = model.temperature - t_k
+                kernel = np.exp(-(diff**2) / (2 * sigma**2))
+                mem_field += r_k * kernel
+            
+            # In loc de overlay, folosim linii de contur (izobare) pentru a nu obtura harta
+            vmax = mem_field.max()
+            if vmax > 0.1: # Doar daca exista un camp semnificativ
+                # Desenam 5 linii de contur intre 50% si 100% din valoarea maxima
+                levels = np.linspace(vmax * 0.5, vmax, 5)
+                ax.contour(mem_field.T, levels=levels, origin='lower', cmap='Greens', linewidths=2, zorder=5)
+ 
     # 2. Hrana
     fx, fy = [], []
     for x in range(model.grid.width):
@@ -132,7 +159,7 @@ def get_plot_figure(model, selected_agent_id=None):
     ax.set_xlim(-0.5, model.grid.width-0.5)
     ax.set_ylim(-0.5, model.grid.height-0.5)
     ax.axis('off')
-    plt.tight_layout()
+    fig.tight_layout()
     
     return fig
 
@@ -154,6 +181,7 @@ def Page():
     
     # Selectie Agent
     selected_agent_id, set_selected_agent_id = solara.use_state(None)
+    show_contours, set_show_contours = solara.use_state(True)
 
     # --- Simulation Loop ---
     def run_loop():
@@ -215,7 +243,7 @@ def Page():
             solara.Button("Play/Pause", on_click=lambda: set_playing(not is_playing), color="success" if is_playing else "primary")
             solara.Button("Reset", on_click=on_reset, color="error")
 
-        solara.Markdown("### 🎛️ Active Inference Weights")
+        # solara.Markdown("### 🎛️ Active Inference Weights")
         
         solara.Markdown(f"**Pragmatic (Survival):** {w_pragmatic:.1f}")
         solara.SliderFloat(label="", value=w_pragmatic, min=0.0, max=5.0, step=0.1, on_value=set_w_pragmatic)
@@ -234,7 +262,7 @@ def Page():
         solara.Markdown(f"**Alive:** {len(alive_agents)} | **Dead:** {dead_count}")
         
         solara.Markdown("---")
-        solara.Markdown("### 🕵️ Agent Inspector")
+        # solara.Markdown("### 🕵️ Agent Inspector")
         
         # Dropdown Selectie
         solara.Select(
@@ -275,5 +303,8 @@ def Page():
             else:
                 solara.Warning("Agent not found.")
 
+        if selected_agent_id is not None:
+            solara.Checkbox(label="Show Memory", value=show_contours, on_value=set_show_contours)
+
     # --- Main View ---
-    solara.FigureMatplotlib(get_plot_figure(model, selected_agent_id))
+    solara.FigureMatplotlib(get_plot_figure(model, selected_agent_id, show_contours))

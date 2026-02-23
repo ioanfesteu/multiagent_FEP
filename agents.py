@@ -15,7 +15,7 @@ SEED = None # Set to an integer for reproducibility
 # --- Environment Generation ---
 NUM_FOOD_PATCHES = 1
 FOOD_PATCH_AMOUNT_MIN = 30
-FOOD_PATCH_AMOUNT_MAX = 80
+FOOD_PATCH_AMOUNT_MAX = 60
 FOOD_REGROWTH_RATE = 0.01   # Cantitatea de hrana regenerata per step
 TEMP_BASE_MAX = 28.0       # Temperatura maxima a zonei centrale
 TEMP_SPOT_1 = 14.0         # Temperatura sursei locale 1
@@ -32,7 +32,7 @@ INIT_ENERGY_MAX = 95.0     # Birth energy (max)
 
 # --- Social Dynamics & Trails ---
 SCENT_DECAY = 0.98         # How fast food scent disappears from environment (0-1)
-MEMORY_DECAY = 0.98        # How fast the agent forgets where it has been (0-1)
+MEMORY_DECAY = 0.90        # How fast the agent forgets where it has been (0-1)
 FOOD_SIGNAL_DURATION = 25.0 # How many steps it emits scent after eating
 
 # --- FEP Brain Parameters (Decision Making) ---
@@ -45,20 +45,20 @@ WEIGHT_TEMP = 1.0          # Sub-weight for Pragmatic
 WEIGHT_ENERGY = 4.0        # Sub-weight for Pragmatic
 
 # --- NIVEL 2 (Socio-Cognitiv) ---
-SOCIAL_WEIGHT = 3.0        
+SOCIAL_WEIGHT = 0.5        
 MEMORY_WEIGHT = 0.8         
 
 # --- PARAMETRI AFECT & PRECIZIE ---
-AROUSAL_SCALING = 5.0      # Multiplicator pentru intervenția Nivelului 2
+AROUSAL_SCALING = 0.1      # Multiplicator pentru intervenția Nivelului 2
 BASE_PRECISION = 2.0       # (\beta_0) Încrederea de bază
 BETA_SENSITIVITY = 1.0     # Cât de mult modifică valența precizia
 
 BETA_BASE = BASE_PRECISION # Alias for backward compatibility
 BETA_MAX = 30.0            # Maximum precision (clipping)
-EXPLORATION_FACTOR = 10.0  # Boredom resistance (high value = avoids repetition)
+EXPLORATION_FACTOR = 20.0  # Boredom resistance (high value = avoids repetition)
 
 # --- Psycho-behavioral Parameters ---
-ETA = 0.1                  # Thermal conductivity / Physical inertia
+ETA = 0.15                  # Thermal conductivity / Physical inertia
 MU_AFFECT = 0.4            # Affect integration rate / Emotional stability
 SIGMA = 0.8                # Precision sensitivity to affect / Psychosomatic coupling
 
@@ -123,10 +123,6 @@ class AllostaticAgent(Agent):
         self.affective_arousal = 0.0   # Intensitatea stării (Alertă/Panic)
         self.valence_bound = 2.0  # For dynamic progress bar scaling
         self.current_beta = BETA_BASE
-        
-        # Memory - OPTIMIZED: with batch cleanup
-        self.visits = {}
-        self.visit_cleanup_counter = 0  # ✅ FIX: Batch cleanup to reduce rehashing
 
         # Social Signaling
         self.food_signal_timer = 0.0
@@ -190,9 +186,17 @@ class AllostaticAgent(Agent):
         self.affective_arousal = self.current_homeostatic_error * (1.0 + max(0, -self.valence * 2.0))
         
         # Modulate Precision (Beta) based on Valence
-        factor = np.exp(SIGMA * self.valence)
-        self.current_beta = np.clip(BETA_BASE * factor, 0.5, BETA_MAX)
-
+        # factor = np.exp(SIGMA * self.valence)
+        # self.current_beta = np.clip(BETA_BASE * factor, 0.5, BETA_MAX)
+        
+        # ********************************************************************************
+        # Codul nou (fără exponențiale, ultra-rapid):
+        # Factorul devine pur și simplu o scalare algebrică. 
+        # Când valence = 0, factor = 1.0. Când valence e pozitivă, crește liniar.
+        factor = max(0.1, 1.0 + (SIGMA * self.valence)) 
+        self.current_beta = max(0.5, min(BETA_MAX, BETA_BASE * factor))
+        # ********************************************************************************
+        
         # Update valence bound for visualization
         current_abs_valence = abs(self.valence)
         if current_abs_valence > self.valence_bound:
@@ -202,25 +206,57 @@ class AllostaticAgent(Agent):
     # Associative Thermal Memory
     # ------------------------------------------
 
+    # def _memory_value(self, T_query):
+    #     """
+    #     Sum of Gaussian kernels (Density Estimation).
+    #     We switched from Nadaraya-Watson (weighted average) to Sum-KDE.
+        
+    #     Why? Weighted average creates a flat plateau if only one memory cluster exists
+    #     (e.g., value is 10.0 everywhere). Sum-KDE creates a peak at the memory 
+    #     location and decays to zero far away, providing a navigation gradient.
+
+    #     V_hat(T) = sum_k [ r_k * exp(-(T - T_k)^2 / (2 * sigma_T^2)) ]
+    #     """
+    #     if not self.thermal_memory:
+    #         return 0.0
+    #     kernels = np.array([
+    #         np.exp(-((T_query - T_k) ** 2) / (2.0 * SimConfig.MEMORY_SIGMA_T ** 2))
+    #         for T_k, _ in self.thermal_memory
+    #     ])
+    #     intakes = np.array([r_k for _, r_k in self.thermal_memory])
+    #     return float((intakes * kernels).sum())
+
+    # *****************************************************************************
     def _memory_value(self, T_query):
         """
-        Sum of Gaussian kernels (Density Estimation).
-        We switched from Nadaraya-Watson (weighted average) to Sum-KDE.
-        
-        Why? Weighted average creates a flat plateau if only one memory cluster exists
-        (e.g., value is 10.0 everywhere). Sum-KDE creates a peak at the memory 
-        location and decays to zero far away, providing a navigation gradient.
-
-        V_hat(T) = sum_k [ r_k * exp(-(T - T_k)^2 / (2 * sigma_T^2)) ]
+        Înlocuire neuromorfică a Gaussienei cu Câmpuri Receptive Liniare.
+        Fără exponențiale, fără ridicări la pătrat. Doar distanță pură.
         """
         if not self.thermal_memory:
             return 0.0
-        kernels = np.array([
-            np.exp(-((T_query - T_k) ** 2) / (2.0 * SimConfig.MEMORY_SIGMA_T ** 2))
-            for T_k, _ in self.thermal_memory
-        ])
-        intakes = np.array([r_k for _, r_k in self.thermal_memory])
-        return float((intakes * kernels).sum())
+            
+        total_value = 0.0
+        
+        # Parametrul existent (MEMORY_SIGMA_T) devine "raza" memoriei.
+        # Ex: Dacă e 6.0, agentul consideră relevantă o memorie doar dacă e la +/- 6 grade distanță.
+        max_distance = SimConfig.MEMORY_SIGMA_T 
+        
+        for T_k, intake in self.thermal_memory:
+            # 1. Distanța absolută simplă (câte grade sunt între memoria mea și temperatura testată)
+            distance = abs(T_query - T_k)
+            
+            # 2. Dacă temperatura testată este suficient de aproape de memoria mea
+            if distance < max_distance:
+                # 3. Calculăm activarea liniară (regula de trei simplă)
+                # Dacă distance = 0 (potrivire perfectă), activarea = 1.0
+                # Dacă distance se apropie de max_distance, activarea scade spre 0.0
+                activation = 1.0 - (distance / max_distance)
+                
+                # Adăugăm valoarea amintirii ponderată de cât de puternic a strigat neuronul
+                total_value += intake * activation
+                
+        return total_value
+    # *****************************************************************************
 
     def _record_feeding(self, intake, T_context):
         """
@@ -237,31 +273,16 @@ class AllostaticAgent(Agent):
     # ------------------------------------------
 
     def manage_memory_and_scent(self):
-        """✅ FIX: Optimized to reduce memory fragmentation on Windows"""
+        """Manages shared memory and food scent emission."""
         if not self.is_alive: return
         pos = self.pos
-        
-        # A. Personal Memory - Update current position
-        self.visits[pos] = self.visits.get(pos, 0.0) + 1.0
-        
-        # Shared Memory - Mark global field (Stigmergy)
+
+        # A. Shared Memory - Mark global field (Stigmergy)
         self.model.shared_memory[pos[0], pos[1]] += 1.0
-        
-        # Decay all values
-        for loc in self.visits:
-            self.visits[loc] *= MEMORY_DECAY
-        
-        # ✅ FIX: Periodic batch cleanup (not every step)
-        # Reduce rehashing on Windows
-        self.visit_cleanup_counter += 1
-        if self.visit_cleanup_counter >= 50:  # Cleanup every 50 steps
-            # Recreate dict without keys with small values
-            self.visits = {k: v for k, v in self.visits.items() if v >= 0.05}
-            self.visit_cleanup_counter = 0
 
         # B. Social Scent
         if self.food_signal_timer > 0:
-            signal_strength = (self.food_signal_timer / FOOD_SIGNAL_DURATION) * 2.0 
+            signal_strength = (self.food_signal_timer / FOOD_SIGNAL_DURATION) * 2.0
             self.model.food_scent[pos[0], pos[1]] += signal_strength
 
     def choose_action(self):
@@ -272,9 +293,6 @@ class AllostaticAgent(Agent):
         candidates = self.model.directions # No "stay put" option to encourage movement
         moves = []
         scores = [] 
-
-        # Starea de foame este un factor decizional cheie pentru Nivelul 2
-        is_hungry = self.E_int < self.E_crit
 
         for dx, dy in candidates:
             nx, ny = x + dx, y + dy
@@ -306,7 +324,11 @@ class AllostaticAgent(Agent):
             # 2. G_epistemic (Curiozitate / Explorare)
             # Evităm locurile deja vizitate de roi (Shared Memory)
             shared_trace = self.model.shared_memory[nx, ny]
+            
+            # EXPLORATION_FACTOR controlează panta de "plictiseală" (cât de repede scade interesul la vizite repetate)
             term_epistemic = 1.0 / (1.0 + EXPLORATION_FACTOR * shared_trace)
+            
+            # WEIGHT_EPISTEMIC controlează magnitudinea maximă a curiozității față de foame/frig
             G_epistemic = SimConfig.WEIGHT_EPISTEMIC * term_epistemic
             
             # Integrare Nivel 1
@@ -317,18 +339,23 @@ class AllostaticAgent(Agent):
             
             G_higher_top_down = 0.0
             
-            # MODIFICARE CHEIE: Nivelul 2 (socio-cognitiv) se activează doar dacă agentului îi este FOAME și este stresat (Arousal > 0)
-            if is_hungry and self.affective_arousal > 0.1:
-                # G_social (Feromoni)
+            # Calculăm motivația de hrană (Hunger Drive) progresiv
+            # 0.0 = Sătul, 1.0 = Complet gol
+            # Folosim pătratul pentru a reduce sensibilitatea când agentul este aproape plin
+            saturation = np.clip(self.E_int / self.E_max, 0.0, 1.0)
+            hunger_drive = (1.0 - saturation) ** 2
+
+            if self.affective_arousal > 0.1:
+                # G_social (Feromoni) - ponderat de foame
                 scent_val = self.model.food_scent[nx, ny]
-                term_social = SimConfig.SOCIAL_WEIGHT * scent_val
+                term_social = SimConfig.SOCIAL_WEIGHT * scent_val * hunger_drive
                 
-                # G_memory (Memorie Termică Asociativă)
+                # G_memory (Memorie Termică Asociativă) - ponderat de foame
                 term_memory = 0.0
                 if self.thermal_memory:
-                    term_memory = SimConfig.MEMORY_WEIGHT * self._memory_value(T_env_next)
+                    term_memory = SimConfig.MEMORY_WEIGHT * self._memory_value(T_env_next) * hunger_drive
                 
-                # Modulare prin Arousal: Cu cât ești mai stresat, cu atât asculți mai mult de grup și memorie
+                # Modulare prin Arousal: Stresul amplifică semnalele, dar conținutul depinde de foame
                 G_higher_top_down = (self.affective_arousal * AROUSAL_SCALING) * (term_social + term_memory)
 
             # --- INTEGRARE TOTALĂ ---
@@ -338,12 +365,37 @@ class AllostaticAgent(Agent):
             scores.append(G_total)
 
         # Softmax
-        scores = np.array(scores)
-        scores_exp = np.exp(self.current_beta * (scores - np.max(scores)))
-        probs = scores_exp / np.sum(scores_exp)
-        
-        idx = np.random.choice(len(moves), p=probs)
-        return moves[idx]
+        # scores = np.array(scores)
+        # scores_exp = np.exp(self.current_beta * (scores - np.max(scores)))
+        # probs = scores_exp / np.sum(scores_exp)
+        # idx = np.argmax(probs)                             # Deterministic choice of the best action
+        # # idx = np.random.choice(len(moves), p=probs)      # Stochastic choice (uncomment for more exploration)
+        # return moves[idx]
+
+        # ********************************************************************************
+        # --- CODUL NOU NEUROMORFIC (Winner-Takes-All) ---
+        # 1. Calculăm magnitudinea zgomotului de fond. 
+        # Beta acționează ca un inhibitor al zgomotului. 
+        noise_amplitude = 1.0 / (self.current_beta + 1e-5) 
+
+        best_move_idx = 0
+        highest_membrane_potential = -float('inf')
+
+        # 2. Fiecare opțiune este un "neuron" care se excită
+        for i in range(len(moves)):
+            # Potențialul membranei = Semnalul util (G_total) + Fluctuații locale (Zgomot)
+            # Folosim o simplă adunare și generare de număr aleatoriu
+            synaptic_noise = np.random.uniform(-noise_amplitude, noise_amplitude)
+            membrane_potential = scores[i] + synaptic_noise
+            
+            # Inhibiție laterală instantanee: Primul care atinge pragul maxim câștigă
+            # și "stinge" complet toți ceilalți neuroni.
+            if membrane_potential > highest_membrane_potential:
+                highest_membrane_potential = membrane_potential
+                best_move_idx = i
+                
+        return moves[best_move_idx]
+        # ********************************************************************************
 
     def step(self):
         if not self.is_alive:
