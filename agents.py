@@ -25,7 +25,7 @@ TEMP_SPOT_2 = 12.0         # Temperatura sursei locale 2
 # --- Agent Physiology (Life & Death) ---
 # METABOLISM = 0.15          # Energy consumed per step (DEPRECIAT)
 BASE_METABOLISM = 0.05       # Consumul minim de energie (când agentul stă la temperatura ideală)
-THERMAL_PENALTY_RATE = 0.02  # Câtă energie suplimentară se arde pentru fiecare grad de deviație
+THERMAL_PENALTY_RATE = 0.2  # Câtă energie suplimentară se arde pentru fiecare grad de deviație
 MAX_ENERGY = 100.0         # Stomach capacity :P
 CRITICAL_ENERGY = 80.0     # Panic threshold (Hungry)
 FOOD_INTAKE = 10.0         # Amount eaten at once
