@@ -1,49 +1,38 @@
-# --- Python Standard ---
+# Secrets
+config.py
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 
-# --- Medii Virtuale (Virtual Environments) ---
-venv/
-env/
+# Environments
+.venv
 .env
-.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+frames/
 
-# --- IDE Settings (VS Code, PyCharm, etc) ---
+# IDEs
 .idea/
 .vscode/
 *.swp
+*.swo
 
-# --- Fișiere generate ---
-# Folderul cu cadrele video (output_dir="frames")
-frames/
+# Solara/Jupyter
+.ipynb_checkpoints
+.jupyter
 
-# Fișiere video finale (generate de ffmpeg)
-*.mp4
-*.avi
-*.mov
-
-# Alte imagini generate temporar
-*.png
-*.jpg
-*.jpeg
-
-# --- Solara / Jupyter ---
-.ipynb_checkpoints/
-
-# --- Alte ---
-multiagent_food_trails.py
-overlay.py
+# files
+agents_simplified.py
 buffer.py
-docs/analiza_multiagent_FEP.md
-docs/supliment_insights_teoretice.md
-multiagent_test.py
-multiagent_test_v2.py
+Capture.PNG
+multiagent_food_trails.py
 multiagent_interactive.py
-docs/sisteme_fizice_active_inference.md
-PLAN_IMPLEMENTARE_LLM_CARETAKER.md
-agents_simplified.py
-GliderAgent.py
-thermal_memory_theory.md
-IMPLEMENTATION_PLAN.md
-agents_simplified.py
+multiagent_test_v2.py
+multiagent_test.py
+overlay.py
+swarm_simulation.mp4

@@ -16,7 +16,7 @@ from model import DualDriveModel
 from agents import (
     COLOR_OK, COLOR_HUNGRY, COLOR_COLD, COLOR_HOT, 
     COLOR_FOOD, COLOR_TRAIL, WEIGHT_TEMP, WEIGHT_ENERGY,
-    BETA_MAX, SimConfig
+    BETA_MAX, SimConfig, AROUSAL_SCALING
 )
 
 # ==========================================
@@ -58,9 +58,19 @@ def ValenceProgressBar(value, min_val=-2.5, max_val=2.5):
 # ==========================================
 
 def get_plot_figure(model, selected_agent_id=None, show_contours=True):
-    fig = Figure(figsize=(6, 6))
-    ax = fig.add_subplot(111)
-    
+    # Determinam daca afisam detaliile de memorie (Contururi + Grafic)
+    show_details = (selected_agent_id is not None) and show_contours
+
+    if show_details:
+        # Marim figura pe verticala pentru a acomoda graficul de memorie
+        fig = Figure(figsize=(8, 11))
+        gs = fig.add_gridspec(2, 2, height_ratios=[3, 1], width_ratios=[1.5, 1], hspace=0.3, wspace=0.3)
+        ax = fig.add_subplot(gs[0, :])
+    else:
+        # Figura patrata standard doar pentru harta
+        fig = Figure(figsize=(8, 8))
+        ax = fig.add_subplot(111)
+
     # 1. Temperatura (Background)
     ax.imshow(model.temperature.T, origin='lower', cmap='coolwarm', alpha=0.3, vmin=0, vmax=40)
     
@@ -89,7 +99,7 @@ def get_plot_figure(model, selected_agent_id=None, show_contours=True):
         ax.scatter(sx, sy, c='gold', s=ss, alpha=0.6, marker='.', label='Scent')
 
     # 1.3 Thermal Memory Overlay (Doar pentru agentul selectat)
-    if show_contours and selected_agent_id is not None:
+    if show_details:
         agent = next((a for a in model.agents if a.unique_id == selected_agent_id), None)
         
         # Verificam daca agentul exista si are amintiri
@@ -100,11 +110,11 @@ def get_plot_figure(model, selected_agent_id=None, show_contours=True):
             # Initializam campul de memorie (dimensiunea gridului)
             mem_field = np.zeros_like(model.temperature)
             
-            # Calculam suma Gaussianelor pentru fiecare amintire (Vectorizat)
-            # V_hat(T) = sum(r_k * exp(-(T_grid - T_k)^2 / 2sigma^2))
+            # Calculam suma campurilor receptive liniare (Vectorizat)
+            # V_hat(T) = sum(r_k * max(0, 1 - |T - T_k|/sigma))
             for t_k, r_k in agent.thermal_memory:
-                diff = model.temperature - t_k
-                kernel = np.exp(-(diff**2) / (2 * sigma**2))
+                diff = np.abs(model.temperature - t_k)
+                kernel = np.maximum(0, 1.0 - (diff / sigma))
                 mem_field += r_k * kernel
             
             # In loc de overlay, folosim linii de contur (izobare) pentru a nu obtura harta
@@ -159,7 +169,78 @@ def get_plot_figure(model, selected_agent_id=None, show_contours=True):
     ax.set_xlim(-0.5, model.grid.width-0.5)
     ax.set_ylim(-0.5, model.grid.height-0.5)
     ax.axis('off')
-    fig.tight_layout()
+    
+    # ==========================================
+    # SUBPLOT 2: Profilul Memoriei (Sum-KDE)
+    # ==========================================
+    if show_details:
+        ax_mem = fig.add_subplot(gs[1, 0])
+        
+        agent = next((a for a in model.agents if a.unique_id == selected_agent_id), None)
+        if agent and hasattr(agent, 'thermal_memory') and agent.thermal_memory:
+            # Generam curba continua
+            t_range = np.linspace(0, 40, 200)
+            sigma = getattr(SimConfig, 'MEMORY_SIGMA_T', 6.0)
+            v_values = []
+            for t in t_range:
+                val = 0
+                for t_k, r_k in agent.thermal_memory:
+                    # Linear Receptive Field logic
+                    dist = abs(t - t_k)
+                    if dist < sigma:
+                        val += r_k * (1.0 - (dist / sigma))
+                v_values.append(val)
+            
+            # Plotare curba
+            ax_mem.plot(t_range, v_values, color='green', lw=2, label='Attraction Field')
+            ax_mem.fill_between(t_range, v_values, color='green', alpha=0.2)
+            
+            # Plotare "batoane" pentru amintirile individuale (Raw Data)
+            for t_k, r_k in agent.thermal_memory:
+                ax_mem.vlines(t_k, 0, r_k, colors='black', linestyles='solid', lw=1.5, alpha=0.6)
+                
+            ax_mem.set_title(f"Agent {selected_agent_id}: Thermal Memory Profile (Linear Receptive Fields)", fontsize=9)
+        else:
+            ax_mem.text(0.5, 0.5, "No memory traces yet", ha='center', va='center', color='gray')
+
+        ax_mem.set_xlim(0, 40)
+        ax_mem.set_xlabel("Temperature (°C)", fontsize=8)
+        ax_mem.set_ylabel("Expected Reward", fontsize=8)
+        ax_mem.grid(True, linestyle='--', alpha=0.5)
+        
+        # ==========================================
+        # SUBPLOT 3: Radar Chart (Weights)
+        # ==========================================
+        ax_radar = fig.add_subplot(gs[1, 1], polar=True)
+        if agent:
+            # Calculam ponderile efective (Level 1 + Level 2 Modulat)
+            saturation = np.clip(agent.E_int / agent.E_max, 0.0, 1.0)
+            hunger_drive = (1.0 - saturation) ** 2
+            modulator = agent.affective_arousal * AROUSAL_SCALING if agent.affective_arousal > 0.1 else 0.0
+            
+            val_P = SimConfig.WEIGHT_PRAGMATIC
+            val_E = SimConfig.WEIGHT_EPISTEMIC
+            val_S = SimConfig.SOCIAL_WEIGHT * modulator * hunger_drive
+            val_M = SimConfig.MEMORY_WEIGHT * modulator * hunger_drive
+            
+            values = [val_P, val_E, val_S, val_M]
+            labels = ['Pragmatic', 'Epistemic', 'Social', 'Memory']
+            
+            # Configurare Radar
+            N = len(labels)
+            angles = [n / float(N) * 2 * np.pi for n in range(N)]
+            values += values[:1] # Inchidem bucla
+            angles += angles[:1]
+            
+            ax_radar.plot(angles, values, linewidth=2, linestyle='solid', color='purple')
+            ax_radar.fill(angles, values, 'purple', alpha=0.2)
+            
+            ax_radar.set_xticks(angles[:-1])
+            ax_radar.set_xticklabels(labels, size=8)
+            ax_radar.set_title("Current Drive Weights", size=9, pad=10)
+            ax_radar.set_yticks([]) # Ascundem cercurile concentrice pentru claritate
+        else:
+            ax_radar.axis('off')
     
     return fig
 
@@ -243,19 +324,10 @@ def Page():
             solara.Button("Play/Pause", on_click=lambda: set_playing(not is_playing), color="success" if is_playing else "primary")
             solara.Button("Reset", on_click=on_reset, color="error")
 
-        # solara.Markdown("### 🎛️ Active Inference Weights")
-        
-        solara.Markdown(f"**Pragmatic (Survival):** {w_pragmatic:.1f}")
-        solara.SliderFloat(label="", value=w_pragmatic, min=0.0, max=5.0, step=0.1, on_value=set_w_pragmatic)
-
-        solara.Markdown(f"**Epistemic (Curiosity):** {w_epistemic:.1f}")
-        solara.SliderFloat(label="", value=w_epistemic, min=0.0, max=5.0, step=0.1, on_value=set_w_epistemic)
-
-        solara.Markdown(f"**Social (Pheromones):** {w_social:.1f}")
-        solara.SliderFloat(label="", value=w_social, min=0.0, max=10.0, step=0.1, on_value=set_w_social)
-
-        solara.Markdown(f"**Cognitive (Memory):** {w_memory:.1f}")
-        solara.SliderFloat(label="", value=w_memory, min=0.0, max=5.0, step=0.1, on_value=set_w_memory)
+        solara.SliderFloat(label=f"Pragmatic (Survival): {w_pragmatic:.1f}", value=w_pragmatic, min=0.0, max=5.0, step=0.1, on_value=set_w_pragmatic)
+        solara.SliderFloat(label=f"Epistemic (Curiosity): {w_epistemic:.1f}", value=w_epistemic, min=0.0, max=5.0, step=0.1, on_value=set_w_epistemic)
+        solara.SliderFloat(label=f"Social (Pheromones): {w_social:.1f}", value=w_social, min=0.0, max=10.0, step=0.1, on_value=set_w_social)
+        solara.SliderFloat(label=f"Cognitive (Memory): {w_memory:.1f}", value=w_memory, min=0.0, max=5.0, step=0.1, on_value=set_w_memory)
 
         solara.Markdown("---")
         solara.Markdown(f"**Steps:** {tick}")
@@ -271,6 +343,9 @@ def Page():
             value=selected_agent_id,
             on_value=set_selected_agent_id
         )
+        
+        if selected_agent_id is not None:
+            solara.Checkbox(label="Show Memory", value=show_contours, on_value=set_show_contours)
         
         # Detalii Agent Selectat
         if selected_agent_id is not None:
@@ -302,9 +377,6 @@ def Page():
                 
             else:
                 solara.Warning("Agent not found.")
-
-        if selected_agent_id is not None:
-            solara.Checkbox(label="Show Memory", value=show_contours, on_value=set_show_contours)
 
     # --- Main View ---
     solara.FigureMatplotlib(get_plot_figure(model, selected_agent_id, show_contours))

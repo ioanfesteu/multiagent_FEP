@@ -16,15 +16,18 @@ SEED = None # Set to an integer for reproducibility
 NUM_FOOD_PATCHES = 1
 FOOD_PATCH_AMOUNT_MIN = 30
 FOOD_PATCH_AMOUNT_MAX = 60
-FOOD_REGROWTH_RATE = 0.01   # Cantitatea de hrana regenerata per step
+FOOD_REGROWTH_RATE = 0.05   # Rata de creștere (cantitate) a noului petic de hrană per pas
+FOOD_REGROWTH_THRESHOLD = 0.5 # Procentul din hrana initiala la care incepe regenerarea (0.2 = 20%)
 TEMP_BASE_MAX = 28.0       # Temperatura maxima a zonei centrale
 TEMP_SPOT_1 = 14.0         # Temperatura sursei locale 1
 TEMP_SPOT_2 = 12.0         # Temperatura sursei locale 2
 
 # --- Agent Physiology (Life & Death) ---
-METABOLISM = 0.15          # Energy consumed per step
+# METABOLISM = 0.15          # Energy consumed per step (DEPRECIAT)
+BASE_METABOLISM = 0.05       # Consumul minim de energie (când agentul stă la temperatura ideală)
+THERMAL_PENALTY_RATE = 0.02  # Câtă energie suplimentară se arde pentru fiecare grad de deviație
 MAX_ENERGY = 100.0         # Stomach capacity :P
-CRITICAL_ENERGY = 50.0     # Panic threshold (Hungry)
+CRITICAL_ENERGY = 80.0     # Panic threshold (Hungry)
 FOOD_INTAKE = 10.0         # Amount eaten at once
 IDEAL_TEMP = 25.0          # Preferred temperature
 INIT_ENERGY_MIN = 40.0     # Birth energy (min)
@@ -140,8 +143,11 @@ class AllostaticAgent(Agent):
         T_env = self.model.temperature[x, y]
         self.T_int += ETA * (T_env - self.T_int)
         
-        # 2. Metabolism
-        self.E_int -= METABOLISM
+        # 2. Dynamic Metabolism based on thermal stress
+        # Energy consumption increases based on thermal stress (deviation from preferred temp)
+        temp_diff = abs(T_env - self.T_pref)
+        current_metabolism = BASE_METABOLISM + (THERMAL_PENALTY_RATE * temp_diff)
+        self.E_int -= current_metabolism
         
         # 3. Eating
         food_available = self.model.food[x, y]
@@ -310,11 +316,14 @@ class AllostaticAgent(Agent):
             T_pred = self.T_int + ETA * (T_env_next - self.T_int)
             err_T_pred = abs(T_pred - self.T_pref)
             
+            # Predict metabolism at the next location
+            predicted_metabolism = BASE_METABOLISM + (THERMAL_PENALTY_RATE * abs(T_env_next - self.T_pref))
+            
             food_there = self.model.food[nx, ny]
             intake_pred = 0
-            if food_there > 0.1 and (self.E_int - METABOLISM) < self.E_max:
+            if food_there > 0.1 and (self.E_int - predicted_metabolism) < self.E_max:
                 intake_pred = min(FOOD_INTAKE, food_there)
-            E_pred = self.E_int - METABOLISM + intake_pred
+            E_pred = self.E_int - predicted_metabolism + intake_pred
             err_E_pred = max(0, self.E_crit - E_pred)
             
             # Notă: G e negativ (cost), deci folosim minus
